@@ -1,4 +1,4 @@
-package qoinhubpackageprivate
+package qoinhubhelper
 
 import (
 	"bytes"

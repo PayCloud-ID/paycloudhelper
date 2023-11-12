@@ -1,4 +1,4 @@
-package qoinhubpackageprivate
+package qoinhubhelper
 
 const (
 	AUDITTRAIL_PROCESS = "audit-trial-process"
