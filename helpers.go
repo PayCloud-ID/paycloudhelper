@@ -31,3 +31,8 @@ func jsonMarshalNoEsc(t interface{}) ([]byte, error) {
 	err := encoder.Encode(t)
 	return buffer.Bytes(), err
 }
+
+func JSONEncode(obj interface{}) string {
+	json, _ := json.MarshalIndent(obj, "", "  ")
+	return string(json)
+}

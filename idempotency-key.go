@@ -30,15 +30,11 @@ func VerifIdemKey(next echo.HandlerFunc) echo.HandlerFunc {
 			Session:        c.Request().Header.Get("Session"),
 		}
 
-		// Idempotency check
-		if header.IdempotencyKey == "" {
-			response.BadRequest("idempotency key required")
-			return c.JSON(response.Code, response)
-		}
-
 		// validate header request
 		validate := header.ValiadateHeaderIdem()
 		if validate != nil {
+			LoggerErrorHub("invalid validation")
+			log.Println(JSONEncode(validate))
 			response.BadRequest("invalid validation")
 			return c.JSON(response.Code, response)
 		}
@@ -50,7 +46,8 @@ func VerifIdemKey(next echo.HandlerFunc) echo.HandlerFunc {
 
 		session, err := strconv.Atoi(header.Session)
 		if err != nil {
-			response.BadRequest("something error when convert session")
+			LoggerErrorHub(err)
+			response.BadRequest("something error when convert data")
 			return c.JSON(response.Code, response)
 		}
 
@@ -65,12 +62,14 @@ func VerifIdemKey(next echo.HandlerFunc) echo.HandlerFunc {
 			var status string
 			request, status, err = ReadBody(c, header.IdempotencyKey)
 			if err != nil {
+				LoggerErrorHub(err)
 				response.InternalServerError(err)
 				return c.JSON(response.Code, response)
 			}
 
 			if status != "" {
-				response.BadRequest(status)
+				LoggerErrorHub(status)
+				response.BadRequest("something wrong in your request")
 				return c.JSON(response.Code, response)
 			}
 		}
@@ -82,6 +81,7 @@ func VerifIdemKey(next echo.HandlerFunc) echo.HandlerFunc {
 		if data != "" {
 			err = jsoniter.ConfigFastest.Unmarshal([]byte(data), &request)
 			if err != nil {
+				LoggerErrorHub(err)
 				response.InternalServerError(err)
 				return c.JSON(response.Code, response)
 			}
@@ -93,8 +93,6 @@ func VerifIdemKey(next echo.HandlerFunc) echo.HandlerFunc {
 		if err != nil {
 			switch strings.Contains(err.Error(), "redis: nil") {
 			case true:
-				LoggerErrorHub(err)
-
 				switch request {
 				case nil:
 					err = StoreRedis(header.IdempotencyKey, header, time.Second*time.Duration(session))
@@ -110,6 +108,7 @@ func VerifIdemKey(next echo.HandlerFunc) echo.HandlerFunc {
 					}
 				}
 			case false:
+				LoggerErrorHub(err)
 				response.InternalServerError(err)
 				return c.JSON(response.Code, response)
 

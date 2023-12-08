@@ -7,6 +7,7 @@ if not exist return error
 package qoinhubhelper
 
 import (
+	"log"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -22,6 +23,8 @@ func VerifCsrf(next echo.HandlerFunc) echo.HandlerFunc {
 		// validate header request
 		validate := header.ValiadateHeaderCsrf()
 		if validate != nil {
+			LoggerErrorHub("invalid validation")
+			log.Println(JSONEncode(validate))
 			response.BadRequest("invalid validation")
 			return c.JSON(response.Code, response)
 		}
@@ -32,10 +35,11 @@ func VerifCsrf(next echo.HandlerFunc) echo.HandlerFunc {
 			// if error redis keys not found, return unathorized
 			switch strings.Contains(err.Error(), "redis: nil") {
 			case true:
-				LoggerErrorHub(err)
-				response.Unauthorized("Token invalid")
+				log.Println("token csrf not found")
+				response.Unauthorized("token invalid")
 				return c.JSON(response.Code, response)
 			case false:
+				LoggerErrorHub(err)
 				response.InternalServerError(err)
 				return c.JSON(response.Code, response)
 			}

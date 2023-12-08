@@ -29,6 +29,7 @@ func GetRedisClient(redisHost, redisPort, redisPassword string, redisDb int) err
 	res, err := redisPoolClient.Ping(ctx).Result()
 	if err != nil {
 		LoggerErrorHub(err)
+		log.Println("open redis pool connection failed")
 		return err
 	}
 
@@ -45,14 +46,14 @@ func GetRedisClient(redisHost, redisPort, redisPassword string, redisDb int) err
 
 func StoreRedis(id string, data interface{}, duration time.Duration) (err error) {
 
-	// open new pool connection if memory address pool connection before is nil
+	// open new pool connection if previously memory address pool connection is nil
 	if redisPoolClient == nil {
 		GetRedisClient(*redisHostMem, *redisPortMem, *redisPasswordMem, *redisDbMem)
 	}
 
 	_, err = redisPoolClient.Ping(redisPoolClient.Context()).Result()
 	if err != nil {
-		LoggerErrorHub("error redis ping : " + err.Error())
+		LoggerErrorHub(err)
 		return
 	}
 
@@ -72,14 +73,14 @@ func StoreRedis(id string, data interface{}, duration time.Duration) (err error)
 
 func GetRedis(id string) (result string, err error) {
 
-	// open new pool connection if memory address pool connection before is nil
+	// open new pool connection if previously memory address pool connection is nil
 	if redisPoolClient == nil {
 		GetRedisClient(*redisHostMem, *redisPortMem, *redisPasswordMem, *redisDbMem)
 	}
 
 	_, err = redisPoolClient.Ping(redisPoolClient.Context()).Result()
 	if err != nil {
-		LoggerErrorHub("error redis ping : " + err.Error())
+		LoggerErrorHub(err)
 		return
 	}
 
@@ -98,14 +99,14 @@ func GetRedis(id string) (result string, err error) {
 
 func DeleteRedis(id string) (err error) {
 
-	// open new pool connection if memory address pool connection before is nil
+	// open new pool connection if previously memory address pool connection is nil
 	if redisPoolClient == nil {
 		GetRedisClient(*redisHostMem, *redisPortMem, *redisPasswordMem, *redisDbMem)
 	}
 
 	_, err = redisPoolClient.Ping(redisPoolClient.Context()).Result()
 	if err != nil {
-		LoggerErrorHub("error redis ping : " + err.Error())
+		LoggerErrorHub(err)
 		return
 	}
 
