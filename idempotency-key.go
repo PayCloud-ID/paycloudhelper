@@ -138,6 +138,12 @@ func ReadBody(c echo.Context, idem string) (map[string]interface{}, string, erro
 			return nil, "", err
 		}
 
+		// convert body bytes
+		err = jsoniter.ConfigFastest.Unmarshal(body, &request)
+		if err != nil {
+			return nil, "", err
+		}
+
 		// Assign Back the request body to echo
 		c.Request().Body = io.NopCloser(bytes.NewBuffer(body))
 	default:
@@ -158,12 +164,6 @@ func ReadBody(c echo.Context, idem string) (map[string]interface{}, string, erro
 
 	// convert body to beauty json
 	jsonMinify, err = JsonMinify(body)
-	if err != nil {
-		return nil, "", err
-	}
-
-	// convert body bytes
-	err = jsoniter.ConfigFastest.Unmarshal(body, &request)
 	if err != nil {
 		return nil, "", err
 	}
