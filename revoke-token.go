@@ -21,6 +21,7 @@ import (
 )
 
 var listStatusRevoke = map[int]string{
+	3: "blacklist",
 	4: "suspend",
 	7: "closed",
 }
