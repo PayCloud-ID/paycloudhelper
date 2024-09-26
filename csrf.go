@@ -25,7 +25,7 @@ func VerifCsrf(next echo.HandlerFunc) echo.HandlerFunc {
 		if validate != nil {
 			LoggerErrorHub("invalid validation")
 			log.Println(JSONEncode(validate))
-			response.BadRequest("invalid validation")
+			response.BadRequest("invalid validation", "")
 			return c.JSON(response.Code, response)
 		}
 
@@ -36,7 +36,7 @@ func VerifCsrf(next echo.HandlerFunc) echo.HandlerFunc {
 			switch strings.Contains(err.Error(), "redis: nil") {
 			case true:
 				log.Println("token csrf not found")
-				response.Unauthorized("token invalid")
+				response.Unauthorized("token invalid", "")
 				return c.JSON(response.Code, response)
 			case false:
 				LoggerErrorHub(err)

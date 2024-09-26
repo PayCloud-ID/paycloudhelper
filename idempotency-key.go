@@ -35,7 +35,7 @@ func VerifIdemKey(next echo.HandlerFunc) echo.HandlerFunc {
 		if validate != nil {
 			LoggerErrorHub("invalid validation")
 			log.Println(JSONEncode(validate))
-			response.BadRequest("invalid validation")
+			response.BadRequest("invalid validation", "")
 			return c.JSON(response.Code, response)
 		}
 
@@ -47,7 +47,7 @@ func VerifIdemKey(next echo.HandlerFunc) echo.HandlerFunc {
 		session, err := strconv.Atoi(header.Session)
 		if err != nil {
 			LoggerErrorHub(err)
-			response.BadRequest("something error when convert data")
+			response.BadRequest("something error when convert data", "")
 			return c.JSON(response.Code, response)
 		}
 
@@ -69,7 +69,7 @@ func VerifIdemKey(next echo.HandlerFunc) echo.HandlerFunc {
 
 			if status != "" {
 				LoggerErrorHub(status)
-				response.BadRequest("something wrong in your request")
+				response.BadRequest("something wrong in your request", "")
 				return c.JSON(response.Code, response)
 			}
 		}
@@ -120,7 +120,7 @@ func VerifIdemKey(next echo.HandlerFunc) echo.HandlerFunc {
 }
 
 /*
-	read body payload and validate with the key
+read body payload and validate with the key
 */
 func ReadBody(c echo.Context, idem string) (map[string]interface{}, string, error) {
 	request := map[string]interface{}{}
@@ -182,7 +182,7 @@ func ReadBody(c echo.Context, idem string) (map[string]interface{}, string, erro
 }
 
 /*
-	generate md5 hash and compare the result with current key submitted
+generate md5 hash and compare the result with current key submitted
 */
 func VerifyMD5(idemKey string, request []byte) (string, error) {
 
