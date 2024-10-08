@@ -2,7 +2,7 @@
 validate header request
 */
 
-package qoinhubhelper
+package paycloudhelper
 
 import (
 	"github.com/thedevsaddam/govalidator"

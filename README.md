@@ -1,2 +1,2 @@
-# qoinhubhelper
-Qoin Hub Helper Golang
+# paycloudhelper
+PayCloud Hub Helper Golang

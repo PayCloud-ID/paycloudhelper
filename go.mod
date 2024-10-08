@@ -1,4 +1,4 @@
-module github.com/Qoin-Digital-Indonesia/qoinhubhelper
+module bitbucket.org/paycloudid/paycloudhelper
 
 go 1.20
 
@@ -16,7 +16,6 @@ require (
 	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421 // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
-	github.com/supriadi-yusuf/adicrypto v0.0.0-20220824031726-6ffae3c6a659
 	github.com/thedevsaddam/govalidator v1.9.10
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect

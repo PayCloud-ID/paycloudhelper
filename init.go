@@ -1,4 +1,4 @@
-package qoinhubhelper
+package paycloudhelper
 
 func init() {
 	AddValidatorLibs()

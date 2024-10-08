@@ -2,7 +2,7 @@
 this middleware function is to make sure there is no doouble request with same payload
 */
 
-package qoinhubhelper
+package paycloudhelper
 
 import (
 	"bytes"

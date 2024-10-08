@@ -1,4 +1,4 @@
-package qoinhubhelper
+package paycloudhelper
 
 import (
 	"log"
@@ -6,7 +6,6 @@ import (
 )
 
 // add audittrail process
-//
 func LogAudittrailProcess(funcName, desc, info string, key *[]string) {
 
 	log.Println("[INFO] : ", info)

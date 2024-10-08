@@ -4,7 +4,7 @@ if exist continue to process the request
 if not exist return error
 */
 
-package qoinhubhelper
+package paycloudhelper
 
 import (
 	"log"

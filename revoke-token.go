@@ -1,7 +1,7 @@
 /*
 this middleware function is to revoke token jwt if status user blocked or suspend
 */
-package qoinhubhelper
+package paycloudhelper
 
 import (
 	"crypto/rsa"

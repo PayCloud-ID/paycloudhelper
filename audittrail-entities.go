@@ -1,4 +1,4 @@
-package qoinhubhelper
+package paycloudhelper
 
 const (
 	AUDITTRAIL_PROCESS = "audit-trail-process"
