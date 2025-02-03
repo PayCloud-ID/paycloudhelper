@@ -33,6 +33,20 @@ func jsonMarshalNoEsc(t interface{}) ([]byte, error) {
 }
 
 func JSONEncode(obj interface{}) string {
-	json, _ := json.MarshalIndent(obj, "", "  ")
-	return string(json)
+	jsonObj, _ := json.MarshalIndent(obj, "", "  ")
+	return string(jsonObj)
+}
+
+// ToJson Encode json from object to JSON and beautify the output.
+func ToJson(data interface{}) string {
+	jsonResult, _ := json.Marshal(data)
+
+	return string(jsonResult)
+}
+
+// ToJsonIndent Encode json from object to JSON and beautify the output.
+func ToJsonIndent(data interface{}) string {
+	jsonResult, _ := json.MarshalIndent(data, "", " ")
+
+	return string(jsonResult)
 }
