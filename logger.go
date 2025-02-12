@@ -18,7 +18,7 @@ var (
 var GinLevel golog.Level = 6
 
 func InitializeLogger() {
-	Log.SetTimeFormat("2006-01-02 15:04:05")
+	Log.SetTimeFormat("2006-01-02 15:04:05.000")
 	Log.SetLevel("info")
 
 	golog.Levels[GinLevel] = &golog.LevelMetadata{
