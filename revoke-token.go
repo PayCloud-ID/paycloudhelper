@@ -9,7 +9,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -30,8 +29,8 @@ type revokeToken struct {
 	Status int `json:"status"`
 }
 
-func logVerifyToken(ctx echo.Context, info string) {
-	log.Println(ctx.Request().RequestURI, " => ", info)
+func logVerifyTokenErr(ctx echo.Context, info string) {
+	LogE("%s => %s", ctx.Request().RequestURI, info)
 }
 
 func RevokeToken(next echo.HandlerFunc) echo.HandlerFunc {
@@ -42,13 +41,13 @@ func RevokeToken(next echo.HandlerFunc) echo.HandlerFunc {
 
 		tokens := strings.Split(tokenStr, " ")
 		if len(tokens) != 2 {
-			logVerifyToken(ctx, "error : invalid authorization token")
+			logVerifyTokenErr(ctx, "error : invalid authorization token")
 			response.Unauthorized("invalid authorization token", "")
 			return ctx.JSON(response.Code, response)
 		}
 
 		if tokens[0] != "Bearer" {
-			logVerifyToken(ctx, "error : authorization token type does not match")
+			logVerifyTokenErr(ctx, "error : authorization token type does not match")
 			response.Unauthorized("authorization token type does not match", "")
 			return ctx.JSON(response.Code, response)
 		}
@@ -56,8 +55,7 @@ func RevokeToken(next echo.HandlerFunc) echo.HandlerFunc {
 		var token *jwt.Token
 		token, err := jwt.Parse(tokens[1], func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-				log.Println("middlewares.GetTokenClaims() token : ")
-				log.Println(token.Method.(*jwt.SigningMethodRSA))
+				LogW("middlewares.GetTokenClaims() token : %v", token.Method.(*jwt.SigningMethodRSA))
 				return nil, errors.New("invalid signing method")
 			}
 			pbKey := os.Getenv("APP_PUBLIC_KEY")
@@ -65,20 +63,20 @@ func RevokeToken(next echo.HandlerFunc) echo.HandlerFunc {
 		})
 
 		if err != nil {
-			logVerifyToken(ctx, "error : authorization token credentials do not match")
+			logVerifyTokenErr(ctx, "error : authorization token credentials do not match")
 			response.Unauthorized("authorization token credentials do not match", "")
 			return ctx.JSON(response.Code, response)
 		}
 
 		if !token.Valid {
-			logVerifyToken(ctx, "error : invalid authorization token credentials")
+			logVerifyTokenErr(ctx, "error : invalid authorization token credentials")
 			response.Unauthorized("invalid authorization token credentials", "")
 			return ctx.JSON(response.Code, response)
 		}
 
 		tokenClaim, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
-			logVerifyToken(ctx, "error : token claims is not valid")
+			logVerifyTokenErr(ctx, "error : token claims is not valid")
 			response.Unauthorized("token claims is not valid", "")
 			return ctx.JSON(response.Code, response)
 		}
@@ -86,7 +84,7 @@ func RevokeToken(next echo.HandlerFunc) echo.HandlerFunc {
 		timeData, _ := time.Parse("2006-01-02 15:04:05", tokenClaim["Expired"].(string))
 		currentTime := time.Now()
 		if currentTime.After(timeData) {
-			logVerifyToken(ctx, "error : authorization token has expired")
+			logVerifyTokenErr(ctx, "error : authorization token has expired")
 			response.Unauthorized("authorization token has expired", "")
 			return ctx.JSON(response.Code, response)
 		}
@@ -116,8 +114,7 @@ func RevokeToken(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		if _, ok := listStatusRevoke[value.Status]; ok {
-			log.Println("==============================")
-			log.Println("revoke token: merchant has been ", listStatusRevoke[value.Status])
+			LogW("revoke token: merchant has been ", listStatusRevoke[value.Status])
 			response.Unauthorized("revoke jwt token", strconv.Itoa(value.Status))
 			return ctx.JSON(response.Code, response)
 		}
@@ -135,11 +132,11 @@ func parsePublicKey(pemBytes []byte) (*rsa.PublicKey, error) {
 	var rawkey interface{}
 	switch block.Type {
 	case "PUBLIC KEY":
-		rsa, err := x509.ParsePKIXPublicKey(block.Bytes)
+		parsedPubKey, err := x509.ParsePKIXPublicKey(block.Bytes)
 		if err != nil {
 			return nil, err
 		}
-		rawkey = rsa
+		rawkey = parsedPubKey
 	default:
 		return nil, fmt.Errorf("ssh: unsupported key type %q", block.Type)
 	}

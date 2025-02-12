@@ -1,8 +1,6 @@
 package paycloudhelper
 
-import (
-	"log"
-)
+import "fmt"
 
 type ResponseApi struct {
 	Code         int         `json:"code"`
@@ -32,13 +30,13 @@ func (r *ResponseApi) BadRequest(message string, intenalCode string) {
 	r.Out(400, message, intenalCode, "bad request", message)
 }
 
-// unauthorized user
+// Unauthorized unauthorized user
 func (r *ResponseApi) Unauthorized(message string, intenalCode string) {
 	LoggerErrorHub(message)
 	r.Out(401, message, intenalCode, "unauthorized", nil)
 }
 
-// in process response
+// Accepted in process response
 func (r *ResponseApi) Accepted(data interface{}) {
 	r.Out(202, "your request in process", "", "accepted", data)
 }
@@ -47,7 +45,10 @@ func (r *ResponseApi) Success(message string, data interface{}) {
 	r.Out(200, message, "", "success", data)
 }
 
-func LoggerErrorHub(err interface{}) {
-	log.Println("something went wrong ")
-	log.Println("error message : ", err)
+func LoggerErrorHub(err interface{}, args ...interface{}) {
+	logData := fmt.Sprintf("ERR : %v", err)
+	if len(args) > 0 {
+		logData += fmt.Sprintf(" %v ", args[0])
+	}
+	LogE(logData)
 }

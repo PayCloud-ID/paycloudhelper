@@ -13,6 +13,10 @@ github.com/golang-jwt/jwt/v5 v5.2.1/go.mod h1:pqrtFR0X4osieyHYxtmOUWsAWrfe1Q5UVI
 github.com/google/gofuzz v1.0.0/go.mod h1:dBl0BpW6vV/+mYPU4Po3pmUjxk6FQPldtuIdl/M65Eg=
 github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=
 github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHmT4TnhNGBo=
+github.com/kataras/golog v0.1.12 h1:Bu7I/G4ilJlbfzjmU39O9N+2uO1pBcMK045fzZ4ytNg=
+github.com/kataras/golog v0.1.12/go.mod h1:wrGSbOiBqbQSQznleVNX4epWM8rl9SJ/rmEacl0yqy4=
+github.com/kataras/pio v0.0.13 h1:x0rXVX0fviDTXOOLOmr4MUxOabu1InVSTu5itF8CXCM=
+github.com/kataras/pio v0.0.13/go.mod h1:k3HNuSw+eJ8Pm2lA4lRhg3DiCjVgHlP8hmXApSej3oM=
 github.com/labstack/echo/v4 v4.11.3 h1:Upyu3olaqSHkCjs1EJJwQ3WId8b8b1hxbogyommKktM=
 github.com/labstack/echo/v4 v4.11.3/go.mod h1:UcGuQ8V6ZNRmSweBIJkPvGfwCMIlFmiqrPqiEBfPYws=
 github.com/labstack/gommon v0.4.0 h1:y7cvthEAEbU0yHOf4axH8ZG2NH8knB9iNSoTO8dyIk8=

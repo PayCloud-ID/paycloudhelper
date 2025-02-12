@@ -35,7 +35,7 @@ func VerifCsrf(next echo.HandlerFunc) echo.HandlerFunc {
 			// if error redis keys not found, return unathorized
 			switch strings.Contains(err.Error(), "redis: nil") {
 			case true:
-				log.Println("token csrf not found")
+				LoggerErrorHub("token csrf not found")
 				response.Unauthorized("token invalid", "")
 				return c.JSON(response.Code, response)
 			case false:

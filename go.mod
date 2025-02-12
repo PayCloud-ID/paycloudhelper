@@ -1,8 +1,15 @@
 module bitbucket.org/paycloudid/paycloudhelper
 
-go 1.20
+go 1.22
+
+toolchain go1.23.1
 
 require github.com/streadway/amqp v1.1.0
+
+require (
+	github.com/kataras/golog v0.1.12 // indirect
+	github.com/kataras/pio v0.0.13 // indirect
+)
 
 require (
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
