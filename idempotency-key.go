@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -33,8 +32,7 @@ func VerifIdemKey(next echo.HandlerFunc) echo.HandlerFunc {
 		// validate header request
 		validate := header.ValiadateHeaderIdem()
 		if validate != nil {
-			LoggerErrorHub("invalid validation")
-			log.Println(JSONEncode(validate))
+			LoggerErrorHub("invalid validation", JSONEncode(validate))
 			response.BadRequest("invalid validation", "")
 			return c.JSON(response.Code, response)
 		}
@@ -119,9 +117,7 @@ func VerifIdemKey(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-/*
-read body payload and validate with the key
-*/
+// ReadBody read body payload and validate with the key
 func ReadBody(c echo.Context, idem string) (map[string]interface{}, string, error) {
 	request := map[string]interface{}{}
 	var jsonMinify []byte
@@ -181,9 +177,7 @@ func ReadBody(c echo.Context, idem string) (map[string]interface{}, string, erro
 
 }
 
-/*
-generate md5 hash and compare the result with current key submitted
-*/
+// VerifyMD5 generate md5 hash and compare the result with current key submitted
 func VerifyMD5(idemKey string, request []byte) (string, error) {
 
 	hash := md5.New()
@@ -195,8 +189,8 @@ func VerifyMD5(idemKey string, request []byte) (string, error) {
 
 	md5Generated := hex.EncodeToString(hash.Sum(nil))
 
-	log.Println("submitted key : ", idemKey)
-	log.Println("key generated :", md5Generated)
+	LogD("submitted key : %s ", idemKey)
+	LogD("key generated : %s ", md5Generated)
 
 	if idemKey != md5Generated {
 		return "key not valid", nil

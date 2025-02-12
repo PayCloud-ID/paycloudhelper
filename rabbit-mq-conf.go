@@ -16,19 +16,19 @@ type RMqAutoConnect struct {
 var Conn *amqp.Connection
 var Channel *amqp.Channel
 var Que *string
-var AppName *string
 
-// service must call this func in main function
+// SetUpRabbitMq service must call this func in main function
+// NOTE : for audittrail purpose
 func SetUpRabbitMq(host, port, vhost, username, password, audittrailQue, appName string) RMqAutoConnect {
 	rmq := new(RMqAutoConnect)
 
 	// set connection to rabbit mq
-	url := host + ":" + port + "/" + vhost
-	log.Println("[AMQP] " + url)
-	rmq.uriConnection = "amqp://" + username + ":" + password + "@" + url
+	urlStr := host + ":" + port + "/" + vhost
+	LogI("[AMQP] Init %s. queue: %s", urlStr, audittrailQue)
+	rmq.uriConnection = "amqp://" + username + ":" + password + "@" + urlStr
 	conn, ch, err := rmq.startRQConnection()
 	if err != nil {
-		log.Println("Error open connection to rabbit : ", err)
+		LogE("[AMQP] %s ERR open connection to rabbit: %v", audittrailQue, err)
 		log.Panicln(err)
 	}
 
@@ -36,12 +36,14 @@ func SetUpRabbitMq(host, port, vhost, username, password, audittrailQue, appName
 	Conn = conn
 	Channel = ch
 	Que = &audittrailQue
-	AppName = &appName
+	if GetAppName() == "" {
+		SetAppName(appName)
+	}
 
 	return *rmq
 }
 
-// service must call this method in defer func
+// CloseConnection service must call this method in defer func
 func (r *RMqAutoConnect) CloseConnection() {
 	r.reset()
 }
@@ -52,7 +54,7 @@ func (r *RMqAutoConnect) startRQConnection() (conn *amqp.Connection, ch *amqp.Ch
 		maxTrialMinute = 5 // 10 minute
 	)
 
-	log.Println("open connection to rabbit mq ...")
+	LogI("[AMQP] open connection to rabbit mq ...")
 
 	retry := 0
 	for {
@@ -62,10 +64,10 @@ func (r *RMqAutoConnect) startRQConnection() (conn *amqp.Connection, ch *amqp.Ch
 			// retry connect to rabbit by sleep time
 			switch {
 			case retry <= maxTrialSecond:
-				log.Println("try to reconnect in 30 seconds ...")
+				LogI("[AMQP] try to reconnect in 30 seconds ...")
 				<-time.After(time.Duration(30) * time.Second)
 			case retry <= maxTrialMinute:
-				log.Println("try to reconnect in 10 minutes ...")
+				LogI("[AMQP] try to reconnect in 10 minutes ...")
 				<-time.After(time.Duration(10) * time.Minute)
 			default:
 				// send notif to sentry
@@ -75,13 +77,13 @@ func (r *RMqAutoConnect) startRQConnection() (conn *amqp.Connection, ch *amqp.Ch
 		break
 	}
 
-	log.Println("connected to rabbit mq successfully")
+	LogI("[AMQP] connected to rabbit mq successfully")
 
 	// keep a live
 	r.conn.Config.Heartbeat = time.Duration(5) * time.Second
 
 	//declare channel
-	log.Println("open channel ...")
+	LogI("[AMQP] open channel ...")
 
 	r.ch, err = r.conn.Channel()
 	if err != nil {
@@ -89,7 +91,7 @@ func (r *RMqAutoConnect) startRQConnection() (conn *amqp.Connection, ch *amqp.Ch
 		log.Panicln(err.Error())
 	}
 
-	log.Println("opening channel succeed")
+	LogI("[AMQP] opening channel succeed")
 
 	return r.conn, r.ch, nil
 }
@@ -104,14 +106,14 @@ func (r *RMqAutoConnect) reset() {
 	r.conn.Close()
 }
 
-// push message to audittrail queue
+// PushMessage push message to audittrail queue
 func PushMessage(data interface{}) {
 
-	log.Println("Publish message async to queue " + *Que + " ...")
+	LogI("[AMQP] Publish message async to queue %s ...", *Que)
 
 	msgBytes, err := jsonMarshalNoEsc(data)
 	if err != nil {
-		log.Println("Error convert data to byte : ", err)
+		LogE("[AMQP] ERR convert data to byte : %v", err)
 		// send sentry error
 
 		return
@@ -131,7 +133,7 @@ func PushMessage(data interface{}) {
 	if err != nil {
 		// send sentry error
 
-		log.Println("Error declaring queue : ", err)
+		LogE("[AMQP] ERR declaring queue : %v", err)
 		return
 	}
 
@@ -149,10 +151,9 @@ func PushMessage(data interface{}) {
 
 	if err != nil {
 		// send sentry error
-
-		log.Println("Error publish message to queue "+*Que+" :", err)
+		LogE("[AMQP] ERR publish message to queue %s %v", *Que, err)
 		return
 	}
 
-	log.Println("Publish message async to queue " + *Que + " successfully")
+	LogI("[AMQP] Publish message async to queue %s successfully", *Que)
 }
