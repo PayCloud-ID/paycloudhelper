@@ -50,7 +50,7 @@ func LogAudittrailData(funcName, desc, source, commType string, key *[]string, d
 		return
 	}
 
-	LogD("LogAudittrailData: func:%s desc:%s source:%s type:%s", funcName, desc, source, commType)
+	LogD("[AMQP] LogAudittrailData: func:%s desc:%s source:%s type:%s", funcName, desc, source, commType)
 
 	go func() {
 		// set data audittrail

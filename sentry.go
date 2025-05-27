@@ -1,4 +1,4 @@
-package paycloudgohelper
+package paycloudhelper
 
 import (
 	"log"
@@ -45,7 +45,7 @@ func InitSentry(Dsn, Environment, Release string, Debug bool) *sentry.Client {
 func SendSentryMessage(message string, service, module, function string) {
 	hub := sentry.NewHub(SentryClient, sentry.NewScope())
 	hub.WithScope(func(scope *sentry.Scope) {
-		scope.SetLevel(sentry.LevelError)
+		scope.SetLevel(sentry.LevelInfo)
 		scope.AddBreadcrumb(&sentry.Breadcrumb{
 			Type:     "Info",
 			Category: "Information",
@@ -65,9 +65,45 @@ func SendSentryError(err error, service, module, function string) {
 	hub.WithScope(func(scope *sentry.Scope) {
 		scope.SetLevel(sentry.LevelError)
 		scope.AddBreadcrumb(&sentry.Breadcrumb{
-			Type:     "Info",
+			Type:     "Error",
 			Category: "Information",
 			Message:  "Details of error stack",
+			Data: map[string]interface{}{
+				"Service":  service,
+				"Module":   module,
+				"Function": function,
+			},
+		}, 5)
+		hub.CaptureException(err)
+	})
+}
+
+func SendSentryWarning(err error, service, module, function string) {
+	hub := sentry.NewHub(SentryClient, sentry.NewScope())
+	hub.WithScope(func(scope *sentry.Scope) {
+		scope.SetLevel(sentry.LevelWarning)
+		scope.AddBreadcrumb(&sentry.Breadcrumb{
+			Type:     "Warning",
+			Category: "Information",
+			Message:  "Details of warning stack",
+			Data: map[string]interface{}{
+				"Service":  service,
+				"Module":   module,
+				"Function": function,
+			},
+		}, 5)
+		hub.CaptureException(err)
+	})
+}
+
+func SendSentryDebug(err error, service, module, function string) {
+	hub := sentry.NewHub(SentryClient, sentry.NewScope())
+	hub.WithScope(func(scope *sentry.Scope) {
+		scope.SetLevel(sentry.LevelDebug)
+		scope.AddBreadcrumb(&sentry.Breadcrumb{
+			Type:     "Debug",
+			Category: "Debug",
+			Message:  "Details of debug message stack",
 			Data: map[string]interface{}{
 				"Service":  service,
 				"Module":   module,
