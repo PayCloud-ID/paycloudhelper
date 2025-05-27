@@ -4,13 +4,14 @@ import (
 	"log"
 	"time"
 
-	"github.com/streadway/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type RMqAutoConnect struct {
 	conn          *amqp.Connection
 	ch            *amqp.Channel
 	uriConnection string
+	Initialized   bool
 }
 
 var Conn *amqp.Connection
@@ -19,26 +20,27 @@ var Que *string
 
 // SetUpRabbitMq service must call this func in main function
 // NOTE : for audittrail purpose
-func SetUpRabbitMq(host, port, vhost, username, password, audittrailQue, appName string) RMqAutoConnect {
+func SetUpRabbitMq(host, port, vhost, username, password, auditTrailQue, appName string) RMqAutoConnect {
 	rmq := new(RMqAutoConnect)
 
 	// set connection to rabbit mq
 	urlStr := host + ":" + port + "/" + vhost
-	LogI("[AMQP] Init %s. queue: %s", urlStr, audittrailQue)
+	LogI("[AMQP] Init %s. queue: %s", urlStr, auditTrailQue)
 	rmq.uriConnection = "amqp://" + username + ":" + password + "@" + urlStr
 	conn, ch, err := rmq.startRQConnection()
 	if err != nil {
-		LogE("[AMQP] %s ERR open connection to rabbit: %v", audittrailQue, err)
-		log.Panicln(err)
+		LogE("[AMQP] %s ERR open connection to rabbit: %v", auditTrailQue, err)
+		return *rmq
 	}
 
 	// set global variable
 	Conn = conn
 	Channel = ch
-	Que = &audittrailQue
+	Que = &auditTrailQue
 	if GetAppName() == "" {
 		SetAppName(appName)
 	}
+	rmq.Initialized = true
 
 	return *rmq
 }
@@ -102,39 +104,64 @@ func (r *RMqAutoConnect) reset() {
 	Channel = nil
 	Que = nil
 
-	r.ch.Close()
-	r.conn.Close()
+	if err := r.ch.Close(); err != nil {
+		return
+	}
+	if err := r.conn.Close(); err != nil {
+		return
+	}
+}
+
+func checkIfQueueExists(channel *amqp.Channel, queueName string) (bool, error) {
+	_, err := channel.QueueDeclarePassive(
+		queueName,
+		true,  // durable
+		false, // delete when unused
+		false, // exclusive
+		false, // no-wait
+		nil,   // arguments
+	)
+
+	if err != nil {
+		// queue does not exists
+		LogE("[AMQP] ERR queue %s does not exists", queueName)
+		return false, err
+	}
+
+	return true, nil
 }
 
 // PushMessage push message to audittrail queue
 func PushMessage(data interface{}) {
-
-	LogI("[AMQP] Publish message async to queue %s ...", *Que)
+	if Que == nil {
+		LogE("[AMQP] ERR queue does not exists")
+		// TODO : send sentry error
+		return
+	}
 
 	msgBytes, err := jsonMarshalNoEsc(data)
 	if err != nil {
 		LogE("[AMQP] ERR convert data to byte : %v", err)
-		// send sentry error
-
+		// TODO : send sentry error
 		return
 	}
 
-	// declare que
-	// declaring creates a queue if it doesn't already exist, or ensures that an existing queue matches the same parameters.
-	_, err = Channel.QueueDeclare(
-		*Que,
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
-
-	if err != nil {
-		// send sentry error
-
-		LogE("[AMQP] ERR declaring queue : %v", err)
-		return
+	// declare que if does not exists
+	if queueExists, _ := checkIfQueueExists(Channel, *Que); !queueExists {
+		// declaring creates a queue if it doesn't already exist, or ensures that an existing queue matches the same parameters.
+		_, err = Channel.QueueDeclare(
+			*Que,
+			true,
+			false,
+			false,
+			false,
+			nil,
+		)
+		if err != nil {
+			// TODO : send sentry error
+			LogE("[AMQP] ERR declaring queue : %v", err)
+			return
+		}
 	}
 
 	err = Channel.Publish(
@@ -150,10 +177,10 @@ func PushMessage(data interface{}) {
 	)
 
 	if err != nil {
-		// send sentry error
+		// TODO : send sentry error
 		LogE("[AMQP] ERR publish message to queue %s %v", *Que, err)
 		return
 	}
 
-	LogI("[AMQP] Publish message async to queue %s successfully", *Que)
+	LogD("[AMQP] Publish message async to queue %s successfully", *Que)
 }

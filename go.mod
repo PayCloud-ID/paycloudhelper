@@ -4,11 +4,11 @@ go 1.22
 
 toolchain go1.23.1
 
-require github.com/streadway/amqp v1.1.0
-
 require (
-	github.com/kataras/golog v0.1.12 // indirect
-	github.com/kataras/pio v0.0.13 // indirect
+	github.com/getsentry/sentry-go v0.33.0
+	github.com/kataras/golog v0.1.12
+	github.com/kataras/pio v0.0.13
+	github.com/rabbitmq/amqp091-go v1.10.0
 )
 
 require (
@@ -28,6 +28,6 @@ require (
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	golang.org/x/crypto v0.14.0 // indirect
 	golang.org/x/net v0.17.0 // indirect
-	golang.org/x/sys v0.13.0 // indirect
-	golang.org/x/text v0.13.0 // indirect
+	golang.org/x/sys v0.18.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
 )
