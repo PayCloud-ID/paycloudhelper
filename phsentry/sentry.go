@@ -1,8 +1,7 @@
-package paycloudhelper
+package phsentry
 
 import (
-	"log"
-
+	pchelper "bitbucket.org/paycloudid/paycloudhelper"
 	"dario.cat/mergo"
 	"github.com/getsentry/sentry-go"
 )
@@ -35,7 +34,7 @@ func NewSentryData(dt *SentryData) {
 	sentryBreadcrumbData = &SentryData{}
 	err := mergo.Merge(sentryBreadcrumbData, *dt)
 	if err != nil {
-		LogE("[SENTRY] ERR initialized sentry data %s", err.Error())
+		pchelper.LogE("[SENTRY] ERR initialized sentry data %s", err.Error())
 		return
 	}
 }
@@ -46,6 +45,15 @@ func GetSentryClient() *sentry.Client {
 
 func GetSentryData() *SentryData {
 	return sentryBreadcrumbData
+}
+
+func GetSentryDataMap() (dt map[string]interface{}) {
+	if sentryBreadcrumbData == nil {
+		return
+	}
+	dt = make(map[string]interface{})
+	_ = mergo.Map(&dt, sentryBreadcrumbData, mergo.WithOverride)
+	return
 }
 
 func GetSentryClientOptions() *sentry.ClientOptions {
@@ -72,18 +80,16 @@ func InitSentryOptions(options SentryOptions) {
 	//merge default options with input
 	err := mergo.Merge(sentryClientOptions, clOpts)
 	if err != nil {
-		log.Fatalf("[SENTRY] ERR merge options", err.Error())
+		pchelper.LogF("[SENTRY] ERR merge options. %s", err.Error())
 	}
 
 	//merge another custom options if exists
 	if options.Options != nil {
 		errAdd := mergo.Merge(sentryClientOptions, options.Options)
 		if errAdd != nil {
-			log.Printf("[SENTRY] ERR merge additional options. %s\n", errAdd.Error())
+			pchelper.LogE("[SENTRY] ERR merge additional options. %s", errAdd.Error())
 		}
 	}
-
-	//setup sentry breadcrumb data
 }
 
 func InitSentry(options SentryOptions) *sentry.Client {
@@ -94,9 +100,23 @@ func InitSentry(options SentryOptions) *sentry.Client {
 	InitSentryOptions(options)
 	client, err := sentry.NewClient(*sentryClientOptions)
 	if err != nil {
-		log.Fatalf("sentry.Init: %s", err)
+		pchelper.LogF("sentry.Init: %s", err)
 	} else {
 		sentryClient = client
+
+		//setup sentry breadcrumb data
+		sd := &SentryData{
+			Service:  pchelper.GetAppName(),
+			Module:   pchelper.GetAppEnv(),
+			Function: "paycloud-be-func",
+		}
+		if options.Data != nil {
+			errDt := mergo.Merge(sd, options.Data, mergo.WithOverride)
+			if errDt != nil {
+				pchelper.LogE("[SENTRY] ERR merge sentry data. %s", errDt.Error())
+			}
+		}
+		NewSentryData(sd)
 	}
 
 	return client
@@ -107,7 +127,7 @@ func SendToSentryMessage(message string, service, module, function string) {
 		return
 	}
 	if sentryClient == nil {
-		log.Printf("[SENTRY] ERR_NO_CLIENT service: %s MSG: %s\n", service, message)
+		pchelper.LogW("[SENTRY] ERR_NO_CLIENT service: %s MSG: %s\n", service, message)
 		return
 	}
 	hub := sentry.NewHub(sentryClient, sentry.NewScope())
@@ -132,7 +152,7 @@ func SendToSentryError(err error, service, module, function string) {
 		return
 	}
 	if sentryClient == nil {
-		log.Printf("[SENTRY] ERR_NO_CLIENT service: %s ERR: %s\n", service, err.Error())
+		pchelper.LogW("[SENTRY] ERR_NO_CLIENT service: %s ERR: %s\n", service, err.Error())
 		return
 	}
 	hub := sentry.NewHub(sentryClient, sentry.NewScope())
@@ -157,7 +177,7 @@ func SendToSentryWarning(err error, service, module, function string) {
 		return
 	}
 	if sentryClient == nil {
-		log.Printf("[SENTRY] ERR_NO_CLIENT service: %s WARN: %s\n", service, err.Error())
+		pchelper.LogW("[SENTRY] ERR_NO_CLIENT service: %s WARN: %s\n", service, err.Error())
 		return
 	}
 	hub := sentry.NewHub(sentryClient, sentry.NewScope())
@@ -182,7 +202,7 @@ func SendToSentryDebug(err error, service, module, function string) {
 		return
 	}
 	if sentryClient == nil {
-		log.Printf("[SENTRY] ERR_NO_CLIENT service: %s DEBUG: %s\n", service, err.Error())
+		pchelper.LogW("[SENTRY] ERR_NO_CLIENT service: %s DEBUG: %s\n", service, err.Error())
 		return
 	}
 	hub := sentry.NewHub(sentryClient, sentry.NewScope())
@@ -207,7 +227,7 @@ func SendToSentryEvent(event *sentry.Event, service, module, function string) {
 		return
 	}
 	if sentryClient == nil {
-		log.Printf("[SENTRY] ERR_NO_CLIENT service: %s EVENT: %s\n", service, module)
+		pchelper.LogW("[SENTRY] ERR_NO_CLIENT service: %s EVENT: %s\n", service, module)
 		return
 	}
 	hub := sentry.NewHub(sentryClient, sentry.NewScope())
@@ -241,9 +261,9 @@ func sendToSentry(msg interface{}, msgType string, args ...string) {
 		return
 	}
 
-	service := GetAppName()
-	module := "paycloud-be"
-	function := "paycloud-be-func"
+	service := sentryBreadcrumbData.Service
+	module := sentryBreadcrumbData.Module
+	function := sentryBreadcrumbData.Function
 	if len(args) > 0 && args[0] != "" {
 		service = args[0]
 	}

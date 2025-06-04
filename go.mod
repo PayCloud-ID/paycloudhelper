@@ -5,6 +5,7 @@ go 1.22
 toolchain go1.23.1
 
 require (
+	dario.cat/mergo v1.0.2
 	github.com/getsentry/sentry-go v0.33.0
 	github.com/kataras/golog v0.1.12
 	github.com/kataras/pio v0.0.13
