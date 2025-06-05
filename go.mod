@@ -7,6 +7,7 @@ toolchain go1.23.1
 require (
 	dario.cat/mergo v1.0.2
 	github.com/getsentry/sentry-go v0.33.0
+	github.com/joho/godotenv v1.5.1
 	github.com/kataras/golog v0.1.12
 	github.com/kataras/pio v0.0.13
 	github.com/rabbitmq/amqp091-go v1.10.0

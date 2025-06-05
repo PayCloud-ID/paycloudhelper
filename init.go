@@ -1,6 +1,11 @@
 package paycloudhelper
 
-import "os"
+import (
+	"log"
+	"os"
+
+	"github.com/joho/godotenv"
+)
 
 func init() {
 	AddValidatorLibs()
@@ -12,11 +17,15 @@ var globAppName string
 var globAppEnv string
 
 func InitializeApp() {
+	if err := godotenv.Load(); err != nil {
+		log.Println("PCHELPER ERR godotenv.Load", err)
+	}
+
 	if appName := os.Getenv("APP_NAME"); appName != "" {
 		SetAppName(appName)
 	}
 	if appEnv := os.Getenv("APP_ENV"); appEnv != "" {
-		SetAppName(appEnv)
+		SetAppEnv(appEnv)
 	}
 }
 
