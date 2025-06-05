@@ -33,3 +33,6 @@ require (
 	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 )
+
+//bug in InitializeApp
+retract v1.5.2
