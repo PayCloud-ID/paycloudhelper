@@ -1,9 +1,10 @@
 package phsentry
 
 import (
-	pchelper "bitbucket.org/paycloudid/paycloudhelper"
+	"bitbucket.org/paycloudid/paycloudhelper/phlogger"
 	"dario.cat/mergo"
 	"github.com/getsentry/sentry-go"
+	"os"
 )
 
 var (
@@ -34,7 +35,7 @@ func NewSentryData(dt *SentryData) {
 	sentryBreadcrumbData = &SentryData{}
 	err := mergo.Merge(sentryBreadcrumbData, *dt)
 	if err != nil {
-		pchelper.LogE("[SENTRY] ERR initialized sentry data %s", err.Error())
+		phlogger.LogE("[SENTRY] ERR initialized sentry data %s", err.Error())
 		return
 	}
 }
@@ -80,14 +81,14 @@ func InitSentryOptions(options SentryOptions) {
 	//merge default options with input
 	err := mergo.Merge(sentryClientOptions, clOpts)
 	if err != nil {
-		pchelper.LogF("[SENTRY] ERR merge options. %s", err.Error())
+		phlogger.LogF("[SENTRY] ERR merge options. %s", err.Error())
 	}
 
 	//merge another custom options if exists
 	if options.Options != nil {
 		errAdd := mergo.Merge(sentryClientOptions, options.Options)
 		if errAdd != nil {
-			pchelper.LogE("[SENTRY] ERR merge additional options. %s", errAdd.Error())
+			phlogger.LogE("[SENTRY] ERR merge additional options. %s", errAdd.Error())
 		}
 	}
 }
@@ -100,20 +101,20 @@ func InitSentry(options SentryOptions) *sentry.Client {
 	InitSentryOptions(options)
 	client, err := sentry.NewClient(*sentryClientOptions)
 	if err != nil {
-		pchelper.LogF("sentry.Init: %s", err)
+		phlogger.LogF("sentry.Init: %s", err)
 	} else {
 		sentryClient = client
 
 		//setup sentry breadcrumb data
 		sd := &SentryData{
-			Service:  pchelper.GetAppName(),
-			Module:   pchelper.GetAppEnv(),
+			Service:  os.Getenv("APP_NAME"),
+			Module:   os.Getenv("APP_ENV"),
 			Function: "paycloud-be-func",
 		}
 		if options.Data != nil {
 			errDt := mergo.Merge(sd, options.Data, mergo.WithOverride)
 			if errDt != nil {
-				pchelper.LogE("[SENTRY] ERR merge sentry data. %s", errDt.Error())
+				phlogger.LogE("[SENTRY] ERR merge sentry data. %s", errDt.Error())
 			}
 		}
 		NewSentryData(sd)
@@ -127,7 +128,7 @@ func SendToSentryMessage(message string, service, module, function string) {
 		return
 	}
 	if sentryClient == nil {
-		pchelper.LogW("[SENTRY] ERR_NO_CLIENT service: %s MSG: %s\n", service, message)
+		phlogger.LogW("[SENTRY] ERR_NO_CLIENT service: %s MSG: %s\n", service, message)
 		return
 	}
 	hub := sentry.NewHub(sentryClient, sentry.NewScope())
@@ -152,7 +153,7 @@ func SendToSentryError(err error, service, module, function string) {
 		return
 	}
 	if sentryClient == nil {
-		pchelper.LogW("[SENTRY] ERR_NO_CLIENT service: %s ERR: %s\n", service, err.Error())
+		phlogger.LogW("[SENTRY] ERR_NO_CLIENT service: %s ERR: %s\n", service, err.Error())
 		return
 	}
 	hub := sentry.NewHub(sentryClient, sentry.NewScope())
@@ -177,7 +178,7 @@ func SendToSentryWarning(err error, service, module, function string) {
 		return
 	}
 	if sentryClient == nil {
-		pchelper.LogW("[SENTRY] ERR_NO_CLIENT service: %s WARN: %s\n", service, err.Error())
+		phlogger.LogW("[SENTRY] ERR_NO_CLIENT service: %s WARN: %s\n", service, err.Error())
 		return
 	}
 	hub := sentry.NewHub(sentryClient, sentry.NewScope())
@@ -202,7 +203,7 @@ func SendToSentryDebug(err error, service, module, function string) {
 		return
 	}
 	if sentryClient == nil {
-		pchelper.LogW("[SENTRY] ERR_NO_CLIENT service: %s DEBUG: %s\n", service, err.Error())
+		phlogger.LogW("[SENTRY] ERR_NO_CLIENT service: %s DEBUG: %s\n", service, err.Error())
 		return
 	}
 	hub := sentry.NewHub(sentryClient, sentry.NewScope())
@@ -227,7 +228,7 @@ func SendToSentryEvent(event *sentry.Event, service, module, function string) {
 		return
 	}
 	if sentryClient == nil {
-		pchelper.LogW("[SENTRY] ERR_NO_CLIENT service: %s EVENT: %s\n", service, module)
+		phlogger.LogW("[SENTRY] ERR_NO_CLIENT service: %s EVENT: %s\n", service, module)
 		return
 	}
 	hub := sentry.NewHub(sentryClient, sentry.NewScope())
