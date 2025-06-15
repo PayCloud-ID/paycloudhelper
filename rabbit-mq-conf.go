@@ -1,6 +1,7 @@
 package paycloudhelper
 
 import (
+	"crypto/tls"
 	"log"
 	"time"
 
@@ -57,11 +58,18 @@ func (r *RMqAutoConnect) startRQConnection() (conn *amqp.Connection, ch *amqp.Ch
 	)
 
 	LogI("[AMQP] open connection to rabbit mq ...")
+	cfg := amqp.Config{
+		Properties: amqp.Table{
+			"connection_name": "audit-trail-" + GetAppName(),
+		},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		Heartbeat:       time.Duration(5) * time.Second, // keep a live
+	}
 
 	retry := 0
 	for {
 		retry++
-		r.conn, err = amqp.Dial(r.uriConnection)
+		r.conn, err = amqp.DialConfig(r.uriConnection, cfg)
 		if err != nil {
 			// retry connect to rabbit by sleep time
 			switch {
@@ -80,9 +88,6 @@ func (r *RMqAutoConnect) startRQConnection() (conn *amqp.Connection, ch *amqp.Ch
 	}
 
 	LogI("[AMQP] connected to rabbit mq successfully")
-
-	// keep a live
-	r.conn.Config.Heartbeat = time.Duration(5) * time.Second
 
 	//declare channel
 	LogI("[AMQP] open channel ...")
