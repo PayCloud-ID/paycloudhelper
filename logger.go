@@ -1,12 +1,12 @@
 package paycloudhelper
 
 import (
+	"bitbucket.org/paycloudid/paycloudhelper/phlogger"
 	"github.com/kataras/golog"
-	"github.com/kataras/pio"
 )
 
 var (
-	Log  = golog.New()
+	Log  = phlogger.Log
 	LogD = Log.Debugf
 	LogI = Log.Infof
 	LogW = Log.Warnf
@@ -15,37 +15,27 @@ var (
 	Logf = Log.Logf
 )
 
-var GinLevel golog.Level = 6
+var GinLevel golog.Level = phlogger.GinLevel
 
 func InitializeLogger() {
-	Log.SetTimeFormat("2006-01-02 15:04:05.000")
-	Log.SetLevel("info")
-
-	golog.Levels[GinLevel] = &golog.LevelMetadata{
-		Name:             "gin",
-		AlternativeNames: []string{"http-server"},
-		Title:            "[GIN]",
-		ColorCode:        pio.Green,
-	}
+	phlogger.InitializeLogger()
 }
 
 func LogSetLevel(levelName string) {
-	Log.SetLevel(levelName)
+	phlogger.LogSetLevel(levelName)
 }
 
 // LogJ JSON
 func LogJ(arg interface{}) {
-	data := ToJson(arg)
-	LogD("%s", data)
+	phlogger.LogJ(arg)
 }
 
 // LogJI as JSON with Indent
 func LogJI(arg interface{}) {
-	data := ToJsonIndent(arg)
-	LogD("%s", data)
+	phlogger.LogJI(arg)
 }
 
 // LogErr Error
 func LogErr(err error) {
-	Log.Error(err)
+	phlogger.LogErr(err)
 }

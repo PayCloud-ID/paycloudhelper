@@ -1,133 +1,70 @@
 package paycloudhelper
 
 import (
-	"log"
-
+	"bitbucket.org/paycloudid/paycloudhelper/phsentry"
 	"github.com/getsentry/sentry-go"
 )
 
-var (
-	Sentries     *SentryData
-	SentryClient *sentry.Client
-)
-
-type SentryData struct {
-	Dsn             string
-	Environment     string
-	Release         string
-	Debug           bool
-	TraceSampleRate float64
-	Event           *sentry.Event
+func NewSentryData(dt *phsentry.SentryData) {
+	phsentry.NewSentryData(dt)
 }
 
-func NewSentryData() *SentryData {
-	return new(SentryData)
+func GetSentryClient() *sentry.Client {
+	return phsentry.GetSentryClient()
 }
 
-func InitSentry(Dsn, Environment, Release string, Debug bool) *sentry.Client {
-	client, err := sentry.NewClient(sentry.ClientOptions{
-		Dsn:              Dsn,
-		Environment:      Environment,
-		Release:          Release,
-		Debug:            Debug,
-		AttachStacktrace: false,
-		TracesSampleRate: 1.0,
-	})
-
-	if err != nil {
-		log.Fatalf("sentry.Init: %s", err)
-	}
-
-	return client
-
+func GetSentryData() *phsentry.SentryData {
+	return phsentry.GetSentryData()
 }
 
-func SendSentryMessage(message string, service, module, function string) {
-	hub := sentry.NewHub(SentryClient, sentry.NewScope())
-	hub.WithScope(func(scope *sentry.Scope) {
-		scope.SetLevel(sentry.LevelInfo)
-		scope.AddBreadcrumb(&sentry.Breadcrumb{
-			Type:     "Info",
-			Category: "Information",
-			Message:  "Details of message stack",
-			Data: map[string]interface{}{
-				"Service":  service,
-				"Module":   module,
-				"Function": function,
-			},
-		}, 5)
-		hub.CaptureMessage(message)
-	})
+func GetSentryClientOptions() *sentry.ClientOptions {
+	return phsentry.GetSentryClientOptions()
 }
 
-func SendSentryError(err error, service, module, function string) {
-	hub := sentry.NewHub(SentryClient, sentry.NewScope())
-	hub.WithScope(func(scope *sentry.Scope) {
-		scope.SetLevel(sentry.LevelError)
-		scope.AddBreadcrumb(&sentry.Breadcrumb{
-			Type:     "Error",
-			Category: "Information",
-			Message:  "Details of error stack",
-			Data: map[string]interface{}{
-				"Service":  service,
-				"Module":   module,
-				"Function": function,
-			},
-		}, 5)
-		hub.CaptureException(err)
-	})
+func InitSentryOptions(options phsentry.SentryOptions) {
+	phsentry.InitSentryOptions(options)
 }
 
-func SendSentryWarning(err error, service, module, function string) {
-	hub := sentry.NewHub(SentryClient, sentry.NewScope())
-	hub.WithScope(func(scope *sentry.Scope) {
-		scope.SetLevel(sentry.LevelWarning)
-		scope.AddBreadcrumb(&sentry.Breadcrumb{
-			Type:     "Warning",
-			Category: "Information",
-			Message:  "Details of warning stack",
-			Data: map[string]interface{}{
-				"Service":  service,
-				"Module":   module,
-				"Function": function,
-			},
-		}, 5)
-		hub.CaptureException(err)
-	})
+func InitSentry(options phsentry.SentryOptions) *sentry.Client {
+	return phsentry.InitSentry(options)
 }
 
-func SendSentryDebug(err error, service, module, function string) {
-	hub := sentry.NewHub(SentryClient, sentry.NewScope())
-	hub.WithScope(func(scope *sentry.Scope) {
-		scope.SetLevel(sentry.LevelDebug)
-		scope.AddBreadcrumb(&sentry.Breadcrumb{
-			Type:     "Debug",
-			Category: "Debug",
-			Message:  "Details of debug message stack",
-			Data: map[string]interface{}{
-				"Service":  service,
-				"Module":   module,
-				"Function": function,
-			},
-		}, 5)
-		hub.CaptureException(err)
-	})
+func SendToSentryMessage(message string, service, module, function string) {
+	phsentry.SendToSentryMessage(message, service, module, function)
 }
 
-func SendSentryEvent(event *sentry.Event, service, module, function string) {
-	hub := sentry.NewHub(SentryClient, sentry.NewScope())
-	hub.WithScope(func(scope *sentry.Scope) {
-		scope.SetLevel(sentry.LevelInfo)
-		scope.AddBreadcrumb(&sentry.Breadcrumb{
-			Type:     "Info",
-			Category: "Information",
-			Message:  "Details of event stack",
-			Data: map[string]interface{}{
-				"Service":  service,
-				"Module":   module,
-				"Function": function,
-			},
-		}, 5)
-		hub.CaptureEvent(event)
-	})
+func SendToSentryError(err error, service, module, function string) {
+	phsentry.SendToSentryError(err, service, module, function)
+}
+
+func SendToSentryWarning(err error, service, module, function string) {
+	phsentry.SendToSentryWarning(err, service, module, function)
+}
+
+func SendToSentryDebug(err error, service, module, function string) {
+	phsentry.SendToSentryDebug(err, service, module, function)
+}
+
+func SendToSentryEvent(event *sentry.Event, service, module, function string) {
+	phsentry.SendToSentryEvent(event, service, module, function)
+}
+
+func SendSentryError(err error, args ...string) {
+	phsentry.SendSentryError(err, args...)
+}
+
+func SendSentryWarning(err error, args ...string) {
+	phsentry.SendSentryWarning(err, args...)
+}
+
+func SendSentryDebug(err error, args ...string) {
+	phsentry.SendSentryDebug(err, args...)
+}
+
+func SendSentryMessage(msg string, args ...string) {
+	phsentry.SendSentryMessage(msg, args...)
+}
+
+func SendSentryEvent(event *sentry.Event, args ...string) {
+	phsentry.SendSentryEvent(event, args...)
 }
