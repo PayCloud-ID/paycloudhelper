@@ -1,6 +1,7 @@
 package paycloudhelper
 
 import (
+	"bitbucket.org/paycloudid/paycloudhelper/phhelper"
 	"log"
 	"os"
 
@@ -13,34 +14,31 @@ func init() {
 	InitializeApp()
 }
 
-var globAppName string
-var globAppEnv string
-
 func InitializeApp() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("PCHELPER ERR godotenv.Load", err)
 	}
 
 	if appName := os.Getenv("APP_NAME"); appName != "" {
-		SetAppName(appName)
+		phhelper.SetAppName(appName)
 	}
 	if appEnv := os.Getenv("APP_ENV"); appEnv != "" {
-		SetAppEnv(appEnv)
+		phhelper.SetAppEnv(appEnv)
 	}
 }
 
 func GetAppName() string {
-	return globAppName
+	return phhelper.GetAppName()
 }
 
 func GetAppEnv() string {
-	return globAppEnv
+	return phhelper.GetAppEnv()
 }
 
 func SetAppName(v string) {
-	globAppName = v
+	phhelper.SetAppName(v)
 }
 
 func SetAppEnv(v string) {
-	globAppEnv = v
+	phhelper.SetAppEnv(v)
 }

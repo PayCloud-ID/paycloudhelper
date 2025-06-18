@@ -24,7 +24,7 @@ func JsonMinify(jsonB []byte) ([]byte, error) {
 	return b, nil
 }
 
-func jsonMarshalNoEsc(t interface{}) ([]byte, error) {
+func JsonMarshalNoEsc(t interface{}) ([]byte, error) {
 	buffer := &bytes.Buffer{}
 	encoder := json.NewEncoder(buffer)
 	encoder.SetEscapeHTML(false)

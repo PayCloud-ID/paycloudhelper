@@ -1,4 +1,4 @@
-package paycloudhelper
+package phaudittrailv0
 
 import (
 	"crypto/tls"
@@ -6,6 +6,9 @@ import (
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+
+	"bitbucket.org/paycloudid/paycloudhelper/phhelper"
+	"bitbucket.org/paycloudid/paycloudhelper/phlogger"
 )
 
 type RMqAutoConnect struct {
@@ -26,11 +29,11 @@ func SetUpRabbitMq(host, port, vhost, username, password, auditTrailQue, appName
 
 	// set connection to rabbit mq
 	urlStr := host + ":" + port + "/" + vhost
-	LogI("[AMQP] Init %s. queue: %s", urlStr, auditTrailQue)
+	phlogger.LogI("[AMQP] Init %s. queue: %s", urlStr, auditTrailQue)
 	rmq.uriConnection = "amqp://" + username + ":" + password + "@" + urlStr
 	conn, ch, err := rmq.startRQConnection()
 	if err != nil {
-		LogE("[AMQP] %s ERR open connection to rabbit: %v", auditTrailQue, err)
+		phlogger.LogE("[AMQP] %s ERR open connection to rabbit: %v", auditTrailQue, err)
 		return *rmq
 	}
 
@@ -38,8 +41,8 @@ func SetUpRabbitMq(host, port, vhost, username, password, auditTrailQue, appName
 	Conn = conn
 	Channel = ch
 	Que = &auditTrailQue
-	if GetAppName() == "" {
-		SetAppName(appName)
+	if phhelper.GetAppName() == "" {
+		phhelper.SetAppName(appName)
 	}
 	rmq.Initialized = true
 
@@ -57,10 +60,10 @@ func (r *RMqAutoConnect) startRQConnection() (conn *amqp.Connection, ch *amqp.Ch
 		maxTrialMinute = 5 // 10 minute
 	)
 
-	LogI("[AMQP] open connection to rabbit mq ...")
+	phlogger.LogI("[AMQP] open connection to rabbit mq ...")
 	cfg := amqp.Config{
 		Properties: amqp.Table{
-			"connection_name": "audit-trail-" + GetAppName(),
+			"connection_name": "audit-trail-" + phhelper.GetAppName(),
 		},
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		Heartbeat:       time.Duration(5) * time.Second, // keep a live
@@ -74,10 +77,10 @@ func (r *RMqAutoConnect) startRQConnection() (conn *amqp.Connection, ch *amqp.Ch
 			// retry connect to rabbit by sleep time
 			switch {
 			case retry <= maxTrialSecond:
-				LogI("[AMQP] try to reconnect in 30 seconds ...")
+				phlogger.LogI("[AMQP] try to reconnect in 30 seconds ...")
 				<-time.After(time.Duration(30) * time.Second)
 			case retry <= maxTrialMinute:
-				LogI("[AMQP] try to reconnect in 10 minutes ...")
+				phlogger.LogI("[AMQP] try to reconnect in 10 minutes ...")
 				<-time.After(time.Duration(10) * time.Minute)
 			default:
 				// send notif to sentry
@@ -87,10 +90,10 @@ func (r *RMqAutoConnect) startRQConnection() (conn *amqp.Connection, ch *amqp.Ch
 		break
 	}
 
-	LogI("[AMQP] connected to rabbit mq successfully")
+	phlogger.LogI("[AMQP] connected to rabbit mq successfully")
 
 	//declare channel
-	LogI("[AMQP] open channel ...")
+	phlogger.LogI("[AMQP] open channel ...")
 
 	r.ch, err = r.conn.Channel()
 	if err != nil {
@@ -98,7 +101,7 @@ func (r *RMqAutoConnect) startRQConnection() (conn *amqp.Connection, ch *amqp.Ch
 		log.Panicln(err.Error())
 	}
 
-	LogI("[AMQP] opening channel succeed")
+	phlogger.LogI("[AMQP] opening channel succeed")
 
 	return r.conn, r.ch, nil
 }
@@ -129,7 +132,7 @@ func checkIfQueueExists(channel *amqp.Channel, queueName string) (bool, error) {
 
 	if err != nil {
 		// queue does not exists
-		LogE("[AMQP] ERR queue %s does not exists", queueName)
+		phlogger.LogE("[AMQP] ERR queue %s does not exists", queueName)
 		return false, err
 	}
 
@@ -139,14 +142,14 @@ func checkIfQueueExists(channel *amqp.Channel, queueName string) (bool, error) {
 // PushMessage push message to audittrail queue
 func PushMessage(data interface{}) {
 	if Que == nil {
-		LogE("[AMQP] ERR queue does not exists")
+		phlogger.LogE("[AMQP] ERR queue does not exists")
 		// TODO : send sentry error
 		return
 	}
 
-	msgBytes, err := jsonMarshalNoEsc(data)
+	msgBytes, err := phhelper.JsonMarshalNoEsc(data)
 	if err != nil {
-		LogE("[AMQP] ERR convert data to byte : %v", err)
+		phlogger.LogE("[AMQP] ERR convert data to byte : %v", err)
 		// TODO : send sentry error
 		return
 	}
@@ -164,7 +167,7 @@ func PushMessage(data interface{}) {
 		)
 		if err != nil {
 			// TODO : send sentry error
-			LogE("[AMQP] ERR declaring queue : %v", err)
+			phlogger.LogE("[AMQP] ERR declaring queue : %v", err)
 			return
 		}
 	}
@@ -183,9 +186,9 @@ func PushMessage(data interface{}) {
 
 	if err != nil {
 		// TODO : send sentry error
-		LogE("[AMQP] ERR publish message to queue %s %v", *Que, err)
+		phlogger.LogE("[AMQP] ERR publish message to queue %s %v", *Que, err)
 		return
 	}
 
-	LogD("[AMQP] Publish message async to queue %s successfully", *Que)
+	phlogger.LogD("[AMQP] Publish message async to queue %s successfully", *Que)
 }

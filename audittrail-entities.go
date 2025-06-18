@@ -1,9 +1,8 @@
 package paycloudhelper
 
 const (
-	AUDITTRAIL_PROCESS = "audit-trail-process"
-	AUDITTRAIL_DATA    = "audit-trail-data"
-	TIME_FORMAT        = "2006-01-02 15:04:05"
+	CmdAuditTrailProcess = "audit-trail-process"
+	CmdAuditTrailData    = "audit-trail-data"
 )
 
 type MessagePayloadAudit struct {
@@ -14,20 +13,20 @@ type MessagePayloadAudit struct {
 	Data     interface{} `json:"Data"`
 }
 
-type AuditTrialProcess struct {
+type AuditTrailProcess struct {
 	Subject     string                `json:"Subject,omitempty"`
 	Function    string                `json:"Function,omitempty"`
 	Description string                `json:"Description,omitempty"`
 	Key         []string              `json:"Key"`
-	Data        DataAudittrailProcess `json:"Data"`
+	Data        DataAuditTrailProcess `json:"Data"`
 }
 
-type DataAudittrailProcess struct {
+type DataAuditTrailProcess struct {
 	Time string `json:"Time"` // time will be handle in library
 	Info string `json:"Info"` // message from service/app want to print in log
 }
 
-type AuditTrialData struct {
+type AuditTrailData struct {
 	Subject           string              `json:"Subject,omitempty"`
 	Function          string              `json:"Function,omitempty"`
 	Description       string              `json:"Description,omitempty"`
