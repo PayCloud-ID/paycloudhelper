@@ -185,7 +185,6 @@ func (c *AmqpClient) handleReInit(conn *amqp.Connection) bool {
 		c.m.Unlock()
 
 		err := c.init(conn)
-
 		if err != nil {
 			c.errLog.Println("[AMQP] failed to initialize channel, retrying...")
 
@@ -228,7 +227,7 @@ func (c *AmqpClient) checkIfQueueExists(ch *amqp.Channel) (bool, error) {
 
 	if err != nil {
 		// queue does not exists
-		LogE("[AMQP] ERR queue %s does not exists", c.queueName)
+		c.errLog.Printf("[AMQP] ERR queue does not exists queue=%s\n", c.queueName)
 		return false, err
 	}
 
@@ -311,7 +310,7 @@ func (c *AmqpClient) Push(data []byte) error {
 		}
 		confirm := <-c.notifyConfirm
 		if confirm.Ack {
-			c.infoLog.Printf("[AMQP] push confirmed [%d]", confirm.DeliveryTag)
+			c.infoLog.Printf("[AMQP] push confirmed tag=%d queue:%s conn=%s\n", confirm.DeliveryTag, c.queueName, c.connName)
 			return nil
 		}
 	}

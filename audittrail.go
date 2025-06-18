@@ -20,7 +20,7 @@ func SetUpRabbitMq(host, port, vhost, username, password, auditTrailQue, appName
 		phhelper.SetAppName(appName)
 	}
 
-	LogI("[AMQP] Init %s. queue: %s", urlStr, auditTrailQue)
+	LogI("[AMQP] Init audit trail rabbitmq url=%s queue=%s", urlStr, auditTrailQue)
 	auditTrailMqClient = NewAmqpClient(auditTrailQue, "audittrail-"+GetAppName(), uriConnection, nil)
 
 	return auditTrailMqClient
@@ -32,7 +32,7 @@ func LogAudittrailProcess(funcName, desc, info string, key *[]string) {
 		return
 	}
 
-	LogD("[AMQP] LogAuditTrailProcess: func:%s desc:%s info:%s", funcName, desc, info)
+	LogD("[AMQP] LogAuditTrailProcess func=%s desc=%s info=%s", funcName, desc, info)
 
 	go func() {
 		dataAudittrail := AuditTrailProcess{
@@ -66,7 +66,7 @@ func LogAudittrailData(funcName, desc, source, commType string, key *[]string, d
 		return
 	}
 
-	LogD("[AMQP] LogAuditTrailData: func:%s desc:%s source:%s type:%s", funcName, desc, source, commType)
+	LogD("[AMQP] LogAuditTrailData func=%s desc=%s source=%s type=%s", funcName, desc, source, commType)
 
 	go func() {
 		//set data audit trail
@@ -97,7 +97,7 @@ func LogAudittrailData(funcName, desc, source, commType string, key *[]string, d
 // pushMessageAudit push message to audit trail queue
 func pushMessageAudit(data interface{}) {
 	if auditTrailMqClient == nil || auditTrailMqClient.queueName == "" {
-		LogE("[AMQP] ERR queue does not exists")
+		LogE("[AMQP] ERR client/queue does not exists")
 		// TODO : send sentry error
 		return
 	}
@@ -106,17 +106,17 @@ func pushMessageAudit(data interface{}) {
 
 	msgBytes, err := jsonMarshalNoEsc(data)
 	if err != nil {
-		LogE("[AMQP] ERR convert data to byte : %v", err)
+		LogE("[AMQP] ERR convert data to byte. err=%v", err)
 		// TODO : send sentry error
 		return
 	}
 
-	err = auditTrailMqClient.Push(msgBytes)
+	err = auditTrailMqClient.UnsafePush(msgBytes)
 	if err != nil {
 		// TODO : send sentry error
-		LogE("[AMQP] ERR publish message to queue %s %v", auditTrailQueueName, err)
+		LogE("[AMQP] ERR publish message to queue queue=%s err=%v", auditTrailQueueName, err)
 		return
 	}
 
-	LogD("[AMQP] Publish message async to queue %s successfully", auditTrailQueueName)
+	LogD("[AMQP] Publish message async to queue successfully queue=%s conn=%s", auditTrailQueueName, auditTrailMqClient.connName)
 }
