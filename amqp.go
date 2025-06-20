@@ -22,6 +22,7 @@ type AmqpClient struct {
 	m               *sync.Mutex
 	connName        string
 	queueName       string
+	consumerName    string
 	infoLog         *log.Logger
 	errLog          *log.Logger
 	connection      *amqp.Connection
@@ -310,7 +311,7 @@ func (c *AmqpClient) Push(data []byte) error {
 		}
 		confirm := <-c.notifyConfirm
 		if confirm.Ack {
-			c.infoLog.Printf("[AMQP] push confirmed tag=%d queue:%s conn=%s\n", confirm.DeliveryTag, c.queueName, c.connName)
+			c.infoLog.Printf("[AMQP] push confirmed tag=%d queue=%s conn=%s\n", confirm.DeliveryTag, c.queueName, c.connName)
 			return nil
 		}
 	}
@@ -367,12 +368,12 @@ func (c *AmqpClient) Consume() (<-chan amqp.Delivery, error) {
 
 	return c.channel.Consume(
 		c.queueName,
-		"",    // Consumer
-		false, // Auto-Ack
-		false, // Exclusive
-		false, // No-local
-		false, // No-Wait
-		nil,   // Args
+		c.consumerName, // Consumer
+		false,          // Auto-Ack
+		false,          // Exclusive
+		false,          // No-local
+		false,          // No-Wait
+		nil,            // Args
 	)
 }
 
@@ -402,6 +403,8 @@ func (c *AmqpClient) Close() error {
 
 // Cc For debug purpose
 // TODO : debugging close channel
-func (c *AmqpClient) Cc() {
+func (c *AmqpClient) Cc() error {
 	_ = c.channel.Close()
+	_ = c.connection.Close()
+	return nil
 }

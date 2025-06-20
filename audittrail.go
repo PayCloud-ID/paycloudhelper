@@ -111,7 +111,7 @@ func pushMessageAudit(data interface{}) {
 		return
 	}
 
-	err = auditTrailMqClient.UnsafePush(msgBytes)
+	err = auditTrailMqClient.Push(msgBytes)
 	if err != nil {
 		// TODO : send sentry error
 		LogE("[AMQP] ERR publish message to queue queue=%s err=%v", auditTrailQueueName, err)
