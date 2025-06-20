@@ -34,8 +34,9 @@ require (
 	golang.org/x/text v0.23.0 // indirect
 )
 
-//bug in InitializeApp
 retract (
+	//bug in audit trail unsafe push, should be safe
 	v1.6.0
+	//bug in InitializeApp
 	v1.5.2
 )
