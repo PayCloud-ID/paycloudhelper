@@ -35,5 +35,7 @@ require (
 )
 
 //bug in InitializeApp
-retract v1.5.2
-retract v1.6.0
+retract (
+	v1.6.0
+	v1.5.2
+)
