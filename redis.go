@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -30,16 +31,25 @@ var (
 	redisDbMem                                   *int
 	redisOptions                                 *redis.Options
 	redisSync                                    *redsync.Redsync
-	redisDefaultDuration                         = 180 * time.Second
+	redisSyncInitOnce                            sync.Once
+	redisSyncInitErr                             error
+	redisDefaultDuration                         = 300 * time.Second
 	redisLockKey                                 = "redis_lock:" // Default Redis lock key prefix
 )
 
 func InitializeRedis(opt redis.Options) {
-	LogI("PCHELPER INIT REDIS")
+	LogI("InitRedis: Start ...")
+
+	redisLockKey = fmt.Sprintf("redis_lock:%s:", GetAppName())
 
 	// Initialize Redis options with default values
 	initRedisOptions(opt)
-	redisLockKey = fmt.Sprintf("redis_lock:%s:", GetAppName())
+
+	// Initialize Redis client
+	err := initRedisClient(GetRedisOptions())
+	if err != nil {
+		LogE("InitRedis: Failed to initialize Redis client: %s", err.Error())
+	}
 }
 
 func GetRedisPoolClient() (*redis.Client, error) {
@@ -95,23 +105,30 @@ func initRedisOptions(rawOpt redis.Options) *redis.Options {
 	return redisOptions
 }
 
-// InitRedSync initializes the redSync instance
-func InitRedSync() error {
-	if redisSync == nil {
-		client, err := GetRedisPoolClient()
-		if err != nil {
-			LogE(fmt.Sprintf("Failed to initialize redisSync: %s", err.Error()))
-			return err
-		}
-
-		// Create a pool with go-redis client
-		pool := goredis.NewPool(client)
-
-		// Create an instance of redsync to be used
-		redisSync = redsync.New(pool)
-		LogI("InitRedSync: redisSync initialized successfully")
+// InitRedSyncOnce initializes the redSync instance once
+func InitRedSyncOnce() error {
+	if redisSync != nil {
+		return nil
 	}
-	return nil
+
+	redisSyncInitOnce.Do(func() {
+		redisSyncInitErr = func() error {
+			client, err := GetRedisPoolClient()
+			if err != nil {
+				LogE(fmt.Sprintf("Failed to initialize redisSync: %s", err.Error()))
+				return err
+			}
+
+			// Create a pool with go-redis client
+			pool := goredis.NewPool(client)
+
+			// Create an instance of redSync to be used
+			redisSync = redsync.New(pool)
+			LogI("InitRedSync: redisSync initialized successfully")
+			return nil
+		}()
+	})
+	return redisSyncInitErr
 }
 
 func GetRedisOptions() *redis.Options {
@@ -119,13 +136,24 @@ func GetRedisOptions() *redis.Options {
 }
 
 func GetRedisClient(redisHost, redisPort, redisPassword string, redisDb int) error {
-	LogI("InitRedis: Starting... %s:%s/%v", redisHost, redisPort, redisDb)
+	LogI("InitRedis: GetRedisClient... %s:%s/%v", redisHost, redisPort, redisDb)
 	if GetRedisOptions() == nil {
 		initRedisOptions(redis.Options{
 			Addr:     redisHost + ":" + redisPort,
 			Password: redisPassword,
 			DB:       redisDb,
 		})
+	}
+
+	err := initRedisClient(GetRedisOptions())
+
+	return err
+}
+
+func initRedisClient(opt *redis.Options) error {
+	LogI("InitRedis: Starting... %s:%s/%v")
+	if opt == nil {
+		return errors.New("nil redis options")
 	}
 
 	redisPoolClient = redis.NewClient(GetRedisOptions())
@@ -149,8 +177,7 @@ func GetRedisClient(redisHost, redisPort, redisPassword string, redisDb int) err
 	LogI("InitRedis: open redis pool connection successfully. %s", res)
 
 	// Initialize RedSync after Redis is initialized
-	err = InitRedSync()
-	if err != nil {
+	if err := InitRedSyncOnce(); err != nil {
 		LogW("Warning: Failed to initialize redisSync: %s", err.Error())
 	}
 
@@ -164,12 +191,6 @@ func StoreRedis(id string, data interface{}, duration time.Duration) (err error)
 		return errCl
 	}
 
-	_, err = rClient.Ping(rClient.Context()).Result()
-	if err != nil {
-		LoggerErrorHub(err)
-		return
-	}
-
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return err
@@ -181,10 +202,12 @@ func StoreRedis(id string, data interface{}, duration time.Duration) (err error)
 
 	err = rClient.Set(ctx, id, string(jsonData), duration).Err()
 	if err != nil {
-		return err
+		LogE("%s ERR set redis key=%s err=%s", "StoreRedis", err.Error())
+	} else {
+		LogD("%s set redis key=%s", "StoreRedis", id)
 	}
 
-	return nil
+	return err
 }
 
 func StoreRedisWithLock(id string, data interface{}, duration time.Duration) (err error) {
@@ -215,6 +238,11 @@ func StoreRedisWithLock(id string, data interface{}, duration time.Duration) (er
 	}()
 
 	err = StoreRedis(id, data, duration)
+	if err != nil {
+		LogE("%s ERR set redis key=%s err=%s", fmtLogPrefix, err.Error())
+	} else {
+		LogD("%s set redis key=%s", fmtLogPrefix, id)
+	}
 
 	return
 }
@@ -226,12 +254,6 @@ func GetRedis(id string) (result string, err error) {
 		return "", errCl
 	}
 
-	_, err = rClient.Ping(rClient.Context()).Result()
-	if err != nil {
-		LoggerErrorHub(err)
-		return
-	}
-
 	// Create a context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
 	defer cancel()
@@ -241,8 +263,11 @@ func GetRedis(id string) (result string, err error) {
 		return
 	}
 
-	if err = getRedis.Err(); err != nil {
-		return
+	err = getRedis.Err()
+	if err != nil {
+		LogE("%s ERR get redis key=%s err=%s", "GetRedis", id, err.Error())
+	} else {
+		LogD("%s get redis key=%s", "GetRedis", id)
 	}
 
 	return getRedis.Result()
@@ -255,12 +280,6 @@ func DeleteRedis(id string) (err error) {
 		return errCl
 	}
 
-	_, err = rClient.Ping(rClient.Context()).Result()
-	if err != nil {
-		LoggerErrorHub(err)
-		return
-	}
-
 	// Create a context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
 	defer cancel()
@@ -270,8 +289,11 @@ func DeleteRedis(id string) (err error) {
 		return
 	}
 
-	if err = res.Err(); err != nil {
-		return
+	err = res.Err()
+	if err != nil {
+		LogE("%s ERR delete redis key=%s err=%s", "DeleteRedis", err.Error())
+	} else {
+		LogD("%s delete redis key=%s", "DeleteRedis", id)
 	}
 
 	return
@@ -279,14 +301,11 @@ func DeleteRedis(id string) (err error) {
 
 // AcquireLock acquires a distributed lock using RedSync
 func AcquireLock(key string, ttl time.Duration) (bool, error) {
-	// Ensure redisSync is initialized
-	if redisSync == nil {
-		err := InitRedSync()
-		if err != nil {
-			errMsg := fmt.Sprintf("failed to initialize redsync: %w", err)
-			LogE(errMsg)
-			return false, fmt.Errorf(errMsg)
-		}
+	// Ensure redisSync is initialized thread-safely
+	if err := InitRedSyncOnce(); err != nil {
+		errMsg := fmt.Sprintf("failed to initialize redsync: %v", err)
+		LogE(errMsg)
+		return false, fmt.Errorf(errMsg)
 	}
 
 	// Create a mutex with options
@@ -361,7 +380,7 @@ func ReleaseLock(key string) error {
 func AcquireLockWithRetry(key string, ttl time.Duration, maxRetries int, retryDelay time.Duration) (*redsync.Mutex, bool, error) {
 	// Initialize redisSync if not already initialized
 	if redisSync == nil {
-		err := InitRedSync()
+		err := InitRedSyncOnce()
 		if err != nil || redisSync == nil {
 			return nil, false, fmt.Errorf("failed to initialize redsync")
 		}
