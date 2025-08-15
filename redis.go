@@ -4,16 +4,53 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
+	"os"
+	"strconv"
+	"sync"
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/go-redsync/redsync/v4"
+	"github.com/go-redsync/redsync/v4/redis/goredis/v8"
 )
 
-var redisPoolClient *redis.Client
-var redisHostMem, redisPortMem, redisPasswordMem *string
-var redisDbMem *int
-var redisOptions *redis.Options
+const (
+	defaultProcessTimeout  = 3000 // 3 seconds
+	minTimeout             = 700  // 700ms minimum
+	defaultRedisRetryDelay = 50
+	defaultRedisRetryMax   = 3
+	defaultRedisBackoff    = 10
+	DefaultRedisTimeout    = 1000 * time.Millisecond
+)
+
+var (
+	redisPoolClient                              *redis.Client
+	redisHostMem, redisPortMem, redisPasswordMem *string
+	redisDbMem                                   *int
+	redisOptions                                 *redis.Options
+	redisSync                                    *redsync.Redsync
+	redisSyncInitOnce                            sync.Once
+	redisSyncInitErr                             error
+	redisDefaultDuration                         = 300 * time.Second
+	redisLockKey                                 = "redis_lock:" // Default Redis lock key prefix
+)
+
+func InitializeRedis(opt redis.Options) {
+	LogI("InitRedis: Start ...")
+
+	redisLockKey = fmt.Sprintf("redis_lock:%s:", GetAppName())
+
+	// Initialize Redis options with default values
+	initRedisOptions(opt)
+
+	// Initialize Redis client
+	err := initRedisClient(GetRedisOptions())
+	if err != nil {
+		LogE("InitRedis: Failed to initialize Redis client: %s", err.Error())
+	}
+}
 
 func GetRedisPoolClient() (*redis.Client, error) {
 	if redisOptions == nil {
@@ -30,11 +67,7 @@ func GetRedisPoolClient() (*redis.Client, error) {
 	return redisPoolClient, nil
 }
 
-func GetRedisOptions() *redis.Options {
-	return redisOptions
-}
-
-func InitRedisOptions(rawOpt redis.Options) *redis.Options {
+func initRedisOptions(rawOpt redis.Options) *redis.Options {
 	ro := &rawOpt
 
 	if h, p, err := net.SplitHostPort(rawOpt.Addr); err == nil {
@@ -72,17 +105,62 @@ func InitRedisOptions(rawOpt redis.Options) *redis.Options {
 	return redisOptions
 }
 
-func GetRedisClient(redisHost, redisPort, redisPassword string, redisDb int) error {
-	ctx := context.Background()
+// InitRedSyncOnce initializes the redSync instance once
+func InitRedSyncOnce() error {
+	if redisSync != nil {
+		return nil
+	}
 
-	LogI("InitRedis: Starting... %s:%s/%v", redisHost, redisPort, redisDb)
-	InitRedisOptions(redis.Options{
-		Addr:     redisHost + ":" + redisPort,
-		Password: redisPassword,
-		DB:       redisDb,
+	redisSyncInitOnce.Do(func() {
+		redisSyncInitErr = func() error {
+			client, err := GetRedisPoolClient()
+			if err != nil {
+				LogE(fmt.Sprintf("Failed to initialize redisSync: %s", err.Error()))
+				return err
+			}
+
+			// Create a pool with go-redis client
+			pool := goredis.NewPool(client)
+
+			// Create an instance of redSync to be used
+			redisSync = redsync.New(pool)
+			LogI("InitRedSync: redisSync initialized successfully")
+			return nil
+		}()
 	})
+	return redisSyncInitErr
+}
+
+func GetRedisOptions() *redis.Options {
+	return redisOptions
+}
+
+func GetRedisClient(redisHost, redisPort, redisPassword string, redisDb int) error {
+	LogI("InitRedis: GetRedisClient... %s:%s/%v", redisHost, redisPort, redisDb)
+	if GetRedisOptions() == nil {
+		initRedisOptions(redis.Options{
+			Addr:     redisHost + ":" + redisPort,
+			Password: redisPassword,
+			DB:       redisDb,
+		})
+	}
+
+	err := initRedisClient(GetRedisOptions())
+
+	return err
+}
+
+func initRedisClient(opt *redis.Options) error {
+	LogI("InitRedis: Starting... %s:%s/%v")
+	if opt == nil {
+		return errors.New("nil redis options")
+	}
 
 	redisPoolClient = redis.NewClient(GetRedisOptions())
+
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
+	defer cancel()
 
 	res, err := redisPoolClient.Ping(ctx).Result()
 	if err != nil {
@@ -98,6 +176,11 @@ func GetRedisClient(redisHost, redisPort, redisPassword string, redisDb int) err
 
 	LogI("InitRedis: open redis pool connection successfully. %s", res)
 
+	// Initialize RedSync after Redis is initialized
+	if err := InitRedSyncOnce(); err != nil {
+		LogW("Warning: Failed to initialize redisSync: %s", err.Error())
+	}
+
 	return nil
 }
 
@@ -108,24 +191,60 @@ func StoreRedis(id string, data interface{}, duration time.Duration) (err error)
 		return errCl
 	}
 
-	_, err = rClient.Ping(rClient.Context()).Result()
-	if err != nil {
-		LoggerErrorHub(err)
-		return
-	}
-
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
+	defer cancel()
+
 	err = rClient.Set(ctx, id, string(jsonData), duration).Err()
 	if err != nil {
-		return err
+		LogE("%s ERR set redis key=%s err=%s", "StoreRedis", err.Error())
+	} else {
+		LogD("%s set redis key=%s", "StoreRedis", id)
 	}
 
-	return nil
+	return err
+}
+
+func StoreRedisWithLock(id string, data interface{}, duration time.Duration) (err error) {
+	fmtLogPrefix := "StoreRedisWithLock"
+
+	// Redis Lock
+	lockKey := redisLockKey + id
+	lockTTL := GetTrxRedisLockTimeout()
+	LogI(fmt.Sprintf("%s lock_ttl=%s lock_key=%s", fmtLogPrefix, lockTTL, lockKey))
+
+	locked, acquireErr := AcquireLock(lockKey, lockTTL)
+	if acquireErr != nil {
+		LogE(fmt.Sprintf("%s ERR acquiring lock: %s", fmtLogPrefix, acquireErr.Error()))
+		return acquireErr
+	}
+
+	if !locked {
+		LogE(fmt.Sprintf("%s Transaction already being updated by another process: %s", fmtLogPrefix, id))
+		return errors.New("already being updated by another process")
+	}
+
+	LogI("%s acquired lock_key=%v, lock_ttl=%v", fmtLogPrefix, lockKey, lockTTL)
+	defer func() {
+		releaseErr := ReleaseLock(lockKey)
+		if releaseErr != nil {
+			LogE(fmt.Sprintf("%s ERR releasing lock: %s", fmtLogPrefix, releaseErr.Error()))
+		}
+	}()
+
+	err = StoreRedis(id, data, duration)
+	if err != nil {
+		LogE("%s ERR set redis key=%s err=%s", fmtLogPrefix, err.Error())
+	} else {
+		LogD("%s set redis key=%s", fmtLogPrefix, id)
+	}
+
+	return
 }
 
 func GetRedis(id string) (result string, err error) {
@@ -135,20 +254,20 @@ func GetRedis(id string) (result string, err error) {
 		return "", errCl
 	}
 
-	_, err = rClient.Ping(rClient.Context()).Result()
-	if err != nil {
-		LoggerErrorHub(err)
-		return
-	}
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
+	defer cancel()
 
-	ctx := context.Background()
 	getRedis := rClient.Get(ctx, id)
 	if getRedis == nil {
 		return
 	}
 
-	if err = getRedis.Err(); err != nil {
-		return
+	err = getRedis.Err()
+	if err != nil {
+		LogE("%s ERR get redis key=%s err=%s", "GetRedis", id, err.Error())
+	} else {
+		LogD("%s get redis key=%s", "GetRedis", id)
 	}
 
 	return getRedis.Result()
@@ -161,21 +280,186 @@ func DeleteRedis(id string) (err error) {
 		return errCl
 	}
 
-	_, err = rClient.Ping(rClient.Context()).Result()
-	if err != nil {
-		LoggerErrorHub(err)
-		return
-	}
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
+	defer cancel()
 
-	ctx := context.Background()
 	res := rClient.Del(ctx, id)
 	if res == nil {
 		return
 	}
 
-	if err = res.Err(); err != nil {
-		return
+	err = res.Err()
+	if err != nil {
+		LogE("%s ERR delete redis key=%s err=%s", "DeleteRedis", err.Error())
+	} else {
+		LogD("%s delete redis key=%s", "DeleteRedis", id)
 	}
 
 	return
+}
+
+// AcquireLock acquires a distributed lock using RedSync
+func AcquireLock(key string, ttl time.Duration) (bool, error) {
+	// Ensure redisSync is initialized thread-safely
+	if err := InitRedSyncOnce(); err != nil {
+		errMsg := fmt.Sprintf("failed to initialize redsync: %v", err)
+		LogE(errMsg)
+		return false, fmt.Errorf(errMsg)
+	}
+
+	// Create a mutex with options
+	mutex := redisSync.NewMutex(
+		key,
+		redsync.WithExpiry(ttl),
+		// Add drift factor to account for clock skew
+		redsync.WithDriftFactor(0.01),
+	)
+
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
+	defer cancel()
+
+	// Try to obtain the lock
+	err := mutex.LockContext(ctx)
+	if err != nil {
+		if err == redsync.ErrFailed {
+			LogE("Lock not acquired but no error occurred %v", err.Error())
+			// Lock not acquired but no error occurred
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to acquire lock for key %s: %w", key, err)
+	}
+
+	// Store the mutex in a map for later release
+	StoreMutex(key, mutex)
+
+	return true, nil
+}
+
+func ReleaseLock(key string) error {
+	mutex := GetMutex(key)
+	if mutex == nil {
+		errMsg := fmt.Sprintf("no mutex found for key %s", key)
+		LogE(errMsg)
+		return fmt.Errorf(errMsg)
+	}
+
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
+	defer cancel()
+
+	ok, err := mutex.UnlockContext(ctx)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to release lock for key %s: %v", key, err)
+		LogE(errMsg)
+		return fmt.Errorf(errMsg)
+	}
+
+	if !ok {
+		errMsg := fmt.Sprintf("failed to release lock for key %s: not owner", key)
+		LogE(errMsg)
+		return fmt.Errorf(errMsg)
+	}
+
+	// Remove the mutex from the map
+	RemoveMutex(key)
+
+	return nil
+}
+
+// AcquireLockWithRetry attempts to acquire a distributed lock with retries
+// key: the lock key
+// ttl: lock time-to-live
+// maxRetries: maximum number of retry attempts
+// retryDelay: delay between retries
+// Returns:
+// - mutex: the lock mutex (nil if not acquired)
+// - acquired: whether the lock was acquired
+// - err: any error that occurred
+func AcquireLockWithRetry(key string, ttl time.Duration, maxRetries int, retryDelay time.Duration) (*redsync.Mutex, bool, error) {
+	// Initialize redisSync if not already initialized
+	if redisSync == nil {
+		err := InitRedSyncOnce()
+		if err != nil || redisSync == nil {
+			return nil, false, fmt.Errorf("failed to initialize redsync")
+		}
+	}
+
+	// Create a mutex with options
+	mutex := redisSync.NewMutex(
+		key,
+		redsync.WithExpiry(ttl),
+		redsync.WithTries(maxRetries),
+		redsync.WithRetryDelay(retryDelay),
+		// Optional: Add drift factor to account for clock skew
+		redsync.WithDriftFactor(0.01),
+	)
+
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
+	defer cancel()
+
+	// Try to obtain the lock
+	err := mutex.LockContext(ctx)
+	if err != nil {
+		if err == redsync.ErrFailed {
+			// Lock not acquired but no error occurred
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("failed to acquire lock for key %s: %w", key, err)
+	}
+
+	return mutex, true, nil
+}
+
+// ReleaseLockWithRetry releases a previously acquired lock with retry mechanism
+func ReleaseLockWithRetry(mutex *redsync.Mutex, maxRetries int) error {
+	if mutex == nil {
+		return fmt.Errorf("mutex is nil")
+	}
+
+	var err error
+
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
+	defer cancel()
+
+	for i := 0; i < maxRetries; i++ {
+		// Try to release the lock
+		if ok, unlockErr := mutex.UnlockContext(ctx); unlockErr == nil {
+			if !ok {
+				// Lock was not released but no error occurred
+				err = fmt.Errorf("failed to release lock: not owner")
+				time.Sleep(time.Duration(GetTrxRedisBackoff()*(i+1)) * time.Millisecond) // Exponential backoff
+				continue
+			}
+			// Lock was successfully released
+			return nil
+		} else {
+			// Error occurred while releasing the lock
+			err = unlockErr
+			time.Sleep(time.Duration(GetTrxRedisBackoff()*(i+1)) * time.Millisecond) // Exponential backoff
+		}
+	}
+
+	return fmt.Errorf("failed to release lock after %d attempts: %w", maxRetries, err)
+}
+
+func GetTrxRedisBackoff() int {
+	rInt := defaultRedisBackoff
+	val, err := strconv.Atoi(os.Getenv("TRANSACTION_REDIS_BACKOFF"))
+	if err == nil && val >= 10 {
+		rInt = val
+	}
+	return rInt
+}
+
+func GetTrxRedisLockTimeout() time.Duration {
+	rInt := 2000 // millisecond
+	val, err := strconv.Atoi(os.Getenv("TRANSACTION_REDIS_LOCK_TIMEOUT"))
+	if err == nil && val >= minTimeout {
+		rInt = val
+	}
+	return time.Duration(rInt) * time.Millisecond
 }

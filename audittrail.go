@@ -32,7 +32,7 @@ func LogAudittrailProcess(funcName, desc, info string, key *[]string) {
 		return
 	}
 
-	LogD("[AMQP] LogAuditTrailProcess func=%s desc=%s info=%s", funcName, desc, info)
+	LogI("[AMQP] LogAuditTrailProcess func=%s desc=%s info=%s", funcName, desc, info)
 
 	go func() {
 		dataAudittrail := AuditTrailProcess{
@@ -66,7 +66,7 @@ func LogAudittrailData(funcName, desc, source, commType string, key *[]string, d
 		return
 	}
 
-	LogD("[AMQP] LogAuditTrailData func=%s desc=%s source=%s type=%s", funcName, desc, source, commType)
+	LogI("[AMQP] LogAuditTrailData func=%s desc=%s source=%s type=%s", funcName, desc, source, commType)
 
 	go func() {
 		//set data audit trail
@@ -118,5 +118,5 @@ func pushMessageAudit(data interface{}) {
 		return
 	}
 
-	LogD("[AMQP] Publish message async to queue successfully queue=%s conn=%s", auditTrailQueueName, auditTrailMqClient.connName)
+	LogI("[AMQP] Publish message async to queue successfully queue=%s conn=%s", auditTrailQueueName, auditTrailMqClient.connName)
 }

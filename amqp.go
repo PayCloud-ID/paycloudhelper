@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"sync"
@@ -99,7 +100,7 @@ func defaultAmqpClient() *AmqpClient {
 func defaultAmqpConfig() *amqp.Config {
 	return &amqp.Config{
 		Properties: amqp.Table{
-			"connection_name": "amqp-" + phhelper.GetAppName(),
+			"connection_name": fmt.Sprintf("amqp-%s", phhelper.GetAppName()),
 		},
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		Heartbeat:       time.Duration(5) * time.Second, // keep a live

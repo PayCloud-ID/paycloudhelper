@@ -37,13 +37,13 @@ func LogSetLevel(levelName string) {
 // LogJ JSON
 func LogJ(arg interface{}) {
 	data := phhelper.ToJson(arg)
-	LogD("%s", data)
+	LogI("%s", data)
 }
 
 // LogJI as JSON with Indent
 func LogJI(arg interface{}) {
 	data := phhelper.ToJsonIndent(arg)
-	LogD("%s", data)
+	LogI("%s", data)
 }
 
 // LogErr Error

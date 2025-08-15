@@ -1,9 +1,9 @@
 package paycloudhelper
 
 import (
-	"bitbucket.org/paycloudid/paycloudhelper/phhelper"
-	"log"
 	"os"
+
+	"bitbucket.org/paycloudid/paycloudhelper/phhelper"
 
 	"github.com/joho/godotenv"
 )
@@ -16,7 +16,7 @@ func init() {
 
 func InitializeApp() {
 	if err := godotenv.Load(); err != nil {
-		log.Println("PCHELPER ERR godotenv.Load", err)
+		LogI("PCHELPER ERR godotenv.Load err_message=%s", err)
 	}
 
 	if appName := os.Getenv("APP_NAME"); appName != "" {
