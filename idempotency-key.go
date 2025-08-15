@@ -189,8 +189,8 @@ func VerifyMD5(idemKey string, request []byte) (string, error) {
 
 	md5Generated := hex.EncodeToString(hash.Sum(nil))
 
-	LogD("submitted key : %s ", idemKey)
-	LogD("key generated : %s ", md5Generated)
+	LogI("submitted key : %s ", idemKey)
+	LogI("key generated : %s ", md5Generated)
 
 	if idemKey != md5Generated {
 		return "key not valid", nil

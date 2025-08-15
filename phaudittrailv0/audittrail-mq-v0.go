@@ -190,5 +190,5 @@ func PushMessage(data interface{}) {
 		return
 	}
 
-	phlogger.LogD("[AMQP] Publish message async to queue %s successfully", *Que)
+	phlogger.LogI("[AMQP] Publish message async to queue %s successfully", *Que)
 }

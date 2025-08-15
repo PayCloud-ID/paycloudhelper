@@ -7,7 +7,6 @@ if not exist return error
 package paycloudhelper
 
 import (
-	"log"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -24,7 +23,7 @@ func VerifCsrf(next echo.HandlerFunc) echo.HandlerFunc {
 		validate := header.ValiadateHeaderCsrf()
 		if validate != nil {
 			LoggerErrorHub("invalid validation")
-			log.Println(JSONEncode(validate))
+			LogI(JSONEncode(validate))
 			response.BadRequest("invalid validation", "")
 			return c.JSON(response.Code, response)
 		}
