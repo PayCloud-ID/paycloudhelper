@@ -43,7 +43,7 @@ func InitializeRedis(opt redis.Options) {
 	redisLockKey = fmt.Sprintf("redis_lock:%s:", GetAppName())
 
 	// Initialize Redis options with default values
-	initRedisOptions(opt)
+	InitRedisOptions(opt)
 
 	// Initialize Redis client
 	err := initRedisClient(GetRedisOptions())
@@ -67,7 +67,7 @@ func GetRedisPoolClient() (*redis.Client, error) {
 	return redisPoolClient, nil
 }
 
-func initRedisOptions(rawOpt redis.Options) *redis.Options {
+func InitRedisOptions(rawOpt redis.Options) *redis.Options {
 	ro := &rawOpt
 
 	if h, p, err := net.SplitHostPort(rawOpt.Addr); err == nil {
@@ -138,7 +138,7 @@ func GetRedisOptions() *redis.Options {
 func GetRedisClient(redisHost, redisPort, redisPassword string, redisDb int) error {
 	LogI("InitRedis: GetRedisClient... %s:%s/%v", redisHost, redisPort, redisDb)
 	if GetRedisOptions() == nil {
-		initRedisOptions(redis.Options{
+		InitRedisOptions(redis.Options{
 			Addr:     redisHost + ":" + redisPort,
 			Password: redisPassword,
 			DB:       redisDb,
@@ -151,10 +151,10 @@ func GetRedisClient(redisHost, redisPort, redisPassword string, redisDb int) err
 }
 
 func initRedisClient(opt *redis.Options) error {
-	LogI("InitRedis: Starting... %s:%s/%v")
 	if opt == nil {
 		return errors.New("nil redis options")
 	}
+	LogI("InitRedis: Starting...")
 
 	redisPoolClient = redis.NewClient(GetRedisOptions())
 
