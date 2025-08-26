@@ -22,10 +22,10 @@ const (
 	defaultRedisRetryDelay = 50
 	defaultRedisRetryMax   = 3
 	defaultRedisBackoff    = 10
-	DefaultRedisTimeout    = 1000 * time.Millisecond
 )
 
 var (
+	DefaultRedisTimeout                          = 1000 * time.Millisecond
 	redisPoolClient                              *redis.Client
 	redisHostMem, redisPortMem, redisPasswordMem *string
 	redisDbMem                                   *int
@@ -102,6 +102,13 @@ func InitRedisOptions(rawOpt redis.Options) *redis.Options {
 		ro.IdleTimeout = 5 * time.Minute
 	}
 	redisOptions = ro
+
+	// Set custom timeout if provided
+	if redisOptions.ReadTimeout > 0 {
+		DefaultRedisTimeout = redisOptions.ReadTimeout + DefaultRedisTimeout
+		LogI("InitRedis: Custom redis timeout set to %v", DefaultRedisTimeout)
+	}
+
 	return redisOptions
 }
 
