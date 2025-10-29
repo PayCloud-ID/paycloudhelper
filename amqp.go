@@ -302,7 +302,7 @@ func (c *AmqpClient) Push(data []byte) error {
 	for {
 		err := c.UnsafePush(data)
 		if err != nil {
-			c.errLog.Println("[AMQP] push failed. Retrying...")
+			//c.errLog.Println("[AMQP] push failed. Retrying...")
 			select {
 			case <-c.done:
 				return errShutdown
@@ -312,7 +312,7 @@ func (c *AmqpClient) Push(data []byte) error {
 		}
 		confirm := <-c.notifyConfirm
 		if confirm.Ack {
-			c.infoLog.Printf("[AMQP] push confirmed tag=%d queue=%s conn=%s\n", confirm.DeliveryTag, c.queueName, c.connName)
+			//c.infoLog.Printf("[AMQP] push confirmed tag=%d queue=%s conn=%s\n", confirm.DeliveryTag, c.queueName, c.connName)
 			return nil
 		}
 	}

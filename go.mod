@@ -47,6 +47,8 @@ require (
 )
 
 retract (
+	//bug redis error message, should be quiet
+	v1.6.3
 	//bug in audit trail unsafe push, should be safe
 	v1.6.0
 	//bug in InitializeApp
