@@ -165,3 +165,44 @@ type RedisPoolStats struct {
 	Misses     uint32 `json:"misses"`
 	Timeouts   uint32 `json:"timeouts"`
 }
+
+// GetRedisMetrics is an alias for GetRedisPoolStats for API consistency
+// Returns comprehensive Redis connection pool metrics
+func GetRedisMetrics() *RedisPoolStats {
+	return GetRedisPoolStats()
+}
+
+// RedisMetricsDetailed provides extended Redis metrics including calculated ratios
+type RedisMetricsDetailed struct {
+	PoolStats    *RedisPoolStats `json:"pool_stats"`
+	HitRate      float64         `json:"hit_rate_percent"`      // Cache hit rate percentage
+	ActiveConns  int             `json:"active_conns"`          // TotalConns - IdleConns
+	PoolUtilized float64         `json:"pool_utilized_percent"` // Percentage of pool in use
+}
+
+// GetRedisMetricsDetailed returns enhanced metrics with calculated statistics
+// Useful for monitoring and capacity planning
+func GetRedisMetricsDetailed() *RedisMetricsDetailed {
+	stats := GetRedisPoolStats()
+	if stats == nil {
+		return nil
+	}
+
+	detailed := &RedisMetricsDetailed{
+		PoolStats:   stats,
+		ActiveConns: stats.TotalConns - stats.IdleConns,
+	}
+
+	// Calculate hit rate percentage
+	totalRequests := stats.Hits + stats.Misses
+	if totalRequests > 0 {
+		detailed.HitRate = (float64(stats.Hits) / float64(totalRequests)) * 100
+	}
+
+	// Calculate pool utilization percentage
+	if stats.TotalConns > 0 {
+		detailed.PoolUtilized = (float64(detailed.ActiveConns) / float64(stats.TotalConns)) * 100
+	}
+
+	return detailed
+}

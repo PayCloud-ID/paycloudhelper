@@ -37,19 +37,89 @@ var (
 	redisLockKey                                 = "redis_lock:" // Default Redis lock key prefix
 )
 
-func InitializeRedis(opt redis.Options) {
-	LogI("InitRedis: Start ...")
+// LockError represents a distributed lock operation error with context
+type LockError struct {
+	Key    string // The lock key
+	Op     string // Operation: "acquire" or "release"
+	Reason string // Human-readable reason for the error
+	Err    error  // Underlying error (if any)
+}
+
+func (e *LockError) Error() string {
+	if e.Err != nil {
+		return fmt.Sprintf("lock %s failed for key '%s': %s (cause: %v)", e.Op, e.Key, e.Reason, e.Err)
+	}
+	return fmt.Sprintf("lock %s failed for key '%s': %s", e.Op, e.Key, e.Reason)
+}
+
+func (e *LockError) Unwrap() error {
+	return e.Err
+}
+
+// RedisInitOptions provides advanced configuration for Redis initialization with retry logic
+type RedisInitOptions struct {
+	Options    redis.Options
+	MaxRetries int           // Maximum number of retry attempts (default: 3)
+	RetryDelay time.Duration // Base delay between retries (default: 1s, uses exponential backoff)
+	FailFast   bool          // If true, return error on failure; if false, log but continue (default: false for backward compat)
+}
+
+// InitializeRedisWithRetry initializes Redis connection with configurable retry logic
+// This provides better resilience against transient connection failures during startup
+func InitializeRedisWithRetry(opts RedisInitOptions) error {
+	// Set defaults for unspecified options
+	if opts.MaxRetries == 0 {
+		opts.MaxRetries = 3
+	}
+	if opts.RetryDelay == 0 {
+		opts.RetryDelay = 1 * time.Second
+	}
+
+	LogI("InitRedis: Starting with retry logic (max_retries=%d, base_delay=%v)...", opts.MaxRetries, opts.RetryDelay)
 
 	redisLockKey = fmt.Sprintf("redis_lock:%s:", GetAppName())
 
 	// Initialize Redis options with default values
-	InitRedisOptions(opt)
+	InitRedisOptions(opts.Options)
 
-	// Initialize Redis client
-	err := initRedisClient(GetRedisOptions())
-	if err != nil {
-		LogE("InitRedis: Failed to initialize Redis client: %s", err.Error())
+	var lastErr error
+	for attempt := 1; attempt <= opts.MaxRetries; attempt++ {
+		err := initRedisClient(GetRedisOptions())
+		if err == nil {
+			LogI("InitRedis: Connected successfully on attempt %d/%d", attempt, opts.MaxRetries)
+			return nil
+		}
+
+		lastErr = err
+		LogW("InitRedis: Attempt %d/%d failed: %v", attempt, opts.MaxRetries, err)
+
+		// Exponential backoff: delay increases with each attempt
+		if attempt < opts.MaxRetries {
+			backoffDelay := opts.RetryDelay * time.Duration(attempt)
+			LogI("InitRedis: Retrying in %v...", backoffDelay)
+			time.Sleep(backoffDelay)
+		}
 	}
+
+	// Handle final failure based on FailFast setting
+	if opts.FailFast {
+		return fmt.Errorf("failed to initialize Redis after %d attempts: %w", opts.MaxRetries, lastErr)
+	}
+
+	// Backward compatible behavior: log error but don't fail
+	LogE("InitRedis: Failed to initialize Redis client after %d attempts: %s", opts.MaxRetries, lastErr.Error())
+	return nil
+}
+
+// InitializeRedis initializes Redis with default retry behavior (backward compatible wrapper)
+// For advanced retry configuration, use InitializeRedisWithRetry instead
+func InitializeRedis(opt redis.Options) {
+	_ = InitializeRedisWithRetry(RedisInitOptions{
+		Options:    opt,
+		MaxRetries: 3,
+		RetryDelay: 1 * time.Second,
+		FailFast:   false, // Backward compatible: don't fail on error
+	})
 }
 
 func GetRedisPoolClient() (*redis.Client, error) {
@@ -306,8 +376,12 @@ func DeleteRedis(id string) error {
 func AcquireLock(key string, ttl time.Duration) (bool, error) {
 	// Ensure redisSync is initialized thread-safely
 	if err := InitRedSyncOnce(); err != nil {
-		errMsg := fmt.Sprintf("failed to initialize redsync: %v", err)
-		return false, fmt.Errorf(errMsg)
+		return false, &LockError{
+			Key:    key,
+			Op:     "acquire",
+			Reason: "redsync initialization failed",
+			Err:    err,
+		}
 	}
 
 	// Create a mutex with options
@@ -326,14 +400,21 @@ func AcquireLock(key string, ttl time.Duration) (bool, error) {
 	err := mutex.LockContext(ctx)
 	if err != nil {
 		if err == redsync.ErrFailed {
-			// Lock not acquired but no error occurred
+			// Lock not acquired but no error occurred (already held by another process)
+			LogD("AcquireLock: lock already held key=%s", key)
 			return false, nil
 		}
-		return false, fmt.Errorf("failed to acquire lock for key %s: %w", key, err)
+		return false, &LockError{
+			Key:    key,
+			Op:     "acquire",
+			Reason: "mutex lock operation failed",
+			Err:    err,
+		}
 	}
 
 	// Store the mutex in a map for later release
 	StoreMutex(key, mutex)
+	LogD("AcquireLock: lock acquired key=%s ttl=%s", key, ttl)
 
 	return true, nil
 }
@@ -341,8 +422,12 @@ func AcquireLock(key string, ttl time.Duration) (bool, error) {
 func ReleaseLock(key string) error {
 	mutex := GetMutex(key)
 	if mutex == nil {
-		errMsg := fmt.Sprintf("no mutex found for key %s", key)
-		return fmt.Errorf(errMsg)
+		return &LockError{
+			Key:    key,
+			Op:     "release",
+			Reason: "no mutex found for this key (was lock acquired?)",
+			Err:    nil,
+		}
 	}
 
 	// Create a context with timeout
@@ -351,17 +436,26 @@ func ReleaseLock(key string) error {
 
 	ok, err := mutex.UnlockContext(ctx)
 	if err != nil {
-		errMsg := fmt.Sprintf("failed to release lock for key %s: %v", key, err)
-		return fmt.Errorf(errMsg)
+		return &LockError{
+			Key:    key,
+			Op:     "release",
+			Reason: "mutex unlock operation failed",
+			Err:    err,
+		}
 	}
 
 	if !ok {
-		errMsg := fmt.Sprintf("failed to release lock for key %s: not owner", key)
-		return fmt.Errorf(errMsg)
+		return &LockError{
+			Key:    key,
+			Op:     "release",
+			Reason: "not the lock owner (lock may have expired or was released by another process)",
+			Err:    nil,
+		}
 	}
 
 	// Remove the mutex from the map
 	RemoveMutex(key)
+	LogD("ReleaseLock: lock released key=%s", key)
 
 	return nil
 }

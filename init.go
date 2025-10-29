@@ -25,6 +25,9 @@ func InitializeApp() {
 	if appEnv := os.Getenv("APP_ENV"); appEnv != "" {
 		phhelper.SetAppEnv(appEnv)
 	}
+
+	// Validate configuration and log warnings
+	LogConfigurationWarnings()
 }
 
 func GetAppName() string {

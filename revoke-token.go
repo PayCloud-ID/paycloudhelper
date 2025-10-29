@@ -29,25 +29,31 @@ type revokeToken struct {
 	Status int `json:"status"`
 }
 
-func logVerifyTokenErr(ctx echo.Context, info string) {
-	LogE("%s => %s", ctx.Request().RequestURI, info)
+func logVerifyTokenErr(ctx echo.Context, requestID, info string) {
+	LogE("[%s] %s => %s", requestID, ctx.Request().RequestURI, info)
 }
 
 func RevokeToken(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(ctx echo.Context) error {
 		var response ResponseApi
+
+		// Get or generate request ID for tracing
+		requestID := GetOrGenerateRequestID(ctx.Request().Header.Get("X-Request-ID"))
+		ctx.Request().Header.Set("X-Request-ID", requestID)
+		ctx.Response().Header().Set("X-Request-ID", requestID) // Echo response to client
+
 		// get token
 		tokenStr := ctx.Request().Header.Get("Authorization")
 
 		tokens := strings.Split(tokenStr, " ")
 		if len(tokens) != 2 {
-			logVerifyTokenErr(ctx, "error : invalid authorization token")
+			logVerifyTokenErr(ctx, requestID, "error : invalid authorization token")
 			response.Unauthorized("invalid authorization token", "")
 			return ctx.JSON(response.Code, response)
 		}
 
 		if tokens[0] != "Bearer" {
-			logVerifyTokenErr(ctx, "error : authorization token type does not match")
+			logVerifyTokenErr(ctx, requestID, "error : authorization token type does not match")
 			response.Unauthorized("authorization token type does not match", "")
 			return ctx.JSON(response.Code, response)
 		}
@@ -55,7 +61,7 @@ func RevokeToken(next echo.HandlerFunc) echo.HandlerFunc {
 		var token *jwt.Token
 		token, err := jwt.Parse(tokens[1], func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-				LogW("middlewares.GetTokenClaims() token : %v", token.Method.(*jwt.SigningMethodRSA))
+				LogW("[%s] middlewares.GetTokenClaims() token : %v", requestID, token.Method.(*jwt.SigningMethodRSA))
 				return nil, errors.New("invalid signing method")
 			}
 			pbKey := os.Getenv("APP_PUBLIC_KEY")
@@ -63,20 +69,20 @@ func RevokeToken(next echo.HandlerFunc) echo.HandlerFunc {
 		})
 
 		if err != nil {
-			logVerifyTokenErr(ctx, "error : authorization token credentials do not match")
+			logVerifyTokenErr(ctx, requestID, "error : authorization token credentials do not match")
 			response.Unauthorized("authorization token credentials do not match", "")
 			return ctx.JSON(response.Code, response)
 		}
 
 		if !token.Valid {
-			logVerifyTokenErr(ctx, "error : invalid authorization token credentials")
+			logVerifyTokenErr(ctx, requestID, "error : invalid authorization token credentials")
 			response.Unauthorized("invalid authorization token credentials", "")
 			return ctx.JSON(response.Code, response)
 		}
 
 		tokenClaim, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
-			logVerifyTokenErr(ctx, "error : token claims is not valid")
+			logVerifyTokenErr(ctx, requestID, "error : token claims is not valid")
 			response.Unauthorized("token claims is not valid", "")
 			return ctx.JSON(response.Code, response)
 		}
@@ -84,12 +90,13 @@ func RevokeToken(next echo.HandlerFunc) echo.HandlerFunc {
 		timeData, _ := time.Parse("2006-01-02 15:04:05", tokenClaim["Expired"].(string))
 		currentTime := time.Now()
 		if currentTime.After(timeData) {
-			logVerifyTokenErr(ctx, "error : authorization token has expired")
+			logVerifyTokenErr(ctx, requestID, "error : authorization token has expired")
 			response.Unauthorized("authorization token has expired", "")
 			return ctx.JSON(response.Code, response)
 		}
 		merchantId, ok := tokenClaim["MerchantId"].(float64)
 		if !ok {
+			logVerifyTokenErr(ctx, requestID, "error : invalid authorization token merchant")
 			response.Unauthorized("invalid authorization token merchant", "")
 			return ctx.JSON(response.Code, response)
 		}
@@ -99,9 +106,11 @@ func RevokeToken(next echo.HandlerFunc) echo.HandlerFunc {
 		data, err := GetRedis(key)
 		if err != nil {
 			if strings.Contains(err.Error(), "redis: nil") {
+				LogD("[%s] RevokeToken: no revoke token found for merchant=%d", requestID, int(merchantId))
 				return next(ctx)
 			}
 			LoggerErrorHub(err)
+			LogE("[%s] RevokeToken: redis error merchant=%d err=%v", requestID, int(merchantId), err)
 			response.InternalServerError(err)
 			return ctx.JSON(response.Code, response)
 		}
@@ -109,16 +118,18 @@ func RevokeToken(next echo.HandlerFunc) echo.HandlerFunc {
 		err = jsoniter.ConfigFastest.Unmarshal([]byte(data), &value)
 		if err != nil {
 			LoggerErrorHub(err)
+			LogE("[%s] RevokeToken: failed to unmarshal revoke data merchant=%d err=%v", requestID, int(merchantId), err)
 			response.InternalServerError(err)
 			return ctx.JSON(response.Code, response)
 		}
 
 		if _, ok := listStatusRevoke[value.Status]; ok {
-			LogW("revoke token: merchant has been ", listStatusRevoke[value.Status])
+			LogW("[%s] RevokeToken: merchant has been %s merchant=%d status=%d", requestID, listStatusRevoke[value.Status], int(merchantId), value.Status)
 			response.Unauthorized("revoke jwt token", strconv.Itoa(value.Status))
 			return ctx.JSON(response.Code, response)
 		}
 
+		LogD("[%s] RevokeToken: token validated merchant=%d", requestID, int(merchantId))
 		return next(ctx)
 	}
 }
