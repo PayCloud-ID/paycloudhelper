@@ -22,3 +22,5 @@ go.work
 
 # IDE file
 .idea
+
+/.github/*.md

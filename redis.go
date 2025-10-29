@@ -191,8 +191,9 @@ func initRedisClient(opt *redis.Options) error {
 	return nil
 }
 
-func StoreRedis(id string, data interface{}, duration time.Duration) (err error) {
-	// get redis client
+// StoreRedisWithContext stores data to Redis with a custom context
+// Allows caller to control cancellation and timeout behavior
+func StoreRedisWithContext(ctx context.Context, id string, data interface{}, duration time.Duration) error {
 	rClient, errCl := GetRedisPoolClient()
 	if errCl != nil {
 		return errCl
@@ -203,13 +204,16 @@ func StoreRedis(id string, data interface{}, duration time.Duration) (err error)
 		return err
 	}
 
-	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
+	// Use provided context with additional timeout as safety net
+	timeoutCtx, cancel := context.WithTimeout(ctx, DefaultRedisTimeout)
 	defer cancel()
 
-	err = rClient.Set(ctx, id, string(jsonData), duration).Err()
+	return rClient.Set(timeoutCtx, id, string(jsonData), duration).Err()
+}
 
-	return err
+// StoreRedis stores data to Redis (backward compatible wrapper)
+func StoreRedis(id string, data interface{}, duration time.Duration) error {
+	return StoreRedisWithContext(context.Background(), id, data, duration)
 }
 
 func StoreRedisWithLock(id string, data interface{}, duration time.Duration) (err error) {
@@ -245,52 +249,57 @@ func StoreRedisWithLock(id string, data interface{}, duration time.Duration) (er
 	return
 }
 
-func GetRedis(id string) (result string, err error) {
-	// get redis client
+// GetRedisWithContext retrieves data from Redis with a custom context
+func GetRedisWithContext(ctx context.Context, id string) (string, error) {
 	rClient, errCl := GetRedisPoolClient()
 	if errCl != nil {
 		return "", errCl
 	}
 
-	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
+	// Use provided context with additional timeout as safety net
+	timeoutCtx, cancel := context.WithTimeout(ctx, DefaultRedisTimeout)
 	defer cancel()
 
-	getRedis := rClient.Get(ctx, id)
+	getRedis := rClient.Get(timeoutCtx, id)
 	if getRedis == nil {
-		return
+		return "", nil
 	}
 
-	err = getRedis.Err()
+	err := getRedis.Err()
 	if err != nil {
-		return
+		return "", err
 	}
 
 	return getRedis.Result()
 }
 
-func DeleteRedis(id string) (err error) {
-	// get redis client
+// GetRedis retrieves data from Redis (backward compatible wrapper)
+func GetRedis(id string) (string, error) {
+	return GetRedisWithContext(context.Background(), id)
+}
+
+// DeleteRedisWithContext deletes data from Redis with a custom context
+func DeleteRedisWithContext(ctx context.Context, id string) error {
 	rClient, errCl := GetRedisPoolClient()
 	if errCl != nil {
 		return errCl
 	}
 
-	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
+	// Use provided context with additional timeout as safety net
+	timeoutCtx, cancel := context.WithTimeout(ctx, DefaultRedisTimeout)
 	defer cancel()
 
-	res := rClient.Del(ctx, id)
+	res := rClient.Del(timeoutCtx, id)
 	if res == nil {
-		return
+		return nil
 	}
 
-	err = res.Err()
-	if err != nil {
-		return
-	}
+	return res.Err()
+}
 
-	return
+// DeleteRedis deletes data from Redis (backward compatible wrapper)
+func DeleteRedis(id string) error {
+	return DeleteRedisWithContext(context.Background(), id)
 }
 
 // AcquireLock acquires a distributed lock using RedSync

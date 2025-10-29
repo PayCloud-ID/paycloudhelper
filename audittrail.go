@@ -1,6 +1,7 @@
 package paycloudhelper
 
 import (
+	"fmt"
 	"time"
 
 	"bitbucket.org/paycloudid/paycloudhelper/phhelper"
@@ -94,11 +95,22 @@ func LogAudittrailData(funcName, desc, source, commType string, key *[]string, d
 	}()
 }
 
+// logAuditErrorWithSentry logs error and optionally sends to Sentry if initialized
+// This is a backward-compatible helper that safely checks for Sentry client
+func logAuditErrorWithSentry(msg string, err error) {
+	LogE(msg)
+
+	// Only send to Sentry if client is initialized (backward compatible)
+	if GetSentryClient() != nil {
+		SendSentryError(err, GetAppName(), "audittrail", "pushMessageAudit")
+	}
+}
+
 // pushMessageAudit push message to audit trail queue
 func pushMessageAudit(data interface{}) {
 	if auditTrailMqClient == nil || auditTrailMqClient.queueName == "" {
-		LogE("[AMQP] ERR client/queue does not exists")
-		// TODO : send sentry error
+		err := fmt.Errorf("[AMQP] client/queue does not exists")
+		logAuditErrorWithSentry("[AMQP] ERR client/queue does not exists", err)
 		return
 	}
 
@@ -106,15 +118,16 @@ func pushMessageAudit(data interface{}) {
 
 	msgBytes, err := jsonMarshalNoEsc(data)
 	if err != nil {
-		LogE("[AMQP] ERR convert data to byte. err=%v", err)
-		// TODO : send sentry error
+		logAuditErrorWithSentry(fmt.Sprintf("[AMQP] ERR convert data to byte. err=%v", err), err)
 		return
 	}
 
 	err = auditTrailMqClient.Push(msgBytes)
 	if err != nil {
-		// TODO : send sentry error
-		LogE("[AMQP] ERR publish message to queue queue=%s err=%v", auditTrailQueueName, err)
+		logAuditErrorWithSentry(
+			fmt.Sprintf("[AMQP] ERR publish message to queue queue=%s err=%v", auditTrailQueueName, err),
+			err,
+		)
 		return
 	}
 
