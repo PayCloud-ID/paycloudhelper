@@ -1,6 +1,7 @@
 package phlogger
 
 import (
+	"fmt"
 	"time"
 
 	"bitbucket.org/paycloudid/paycloudhelper/phhelper"
@@ -10,13 +11,39 @@ import (
 
 var (
 	Log  = golog.New()
-	LogD = Log.Debugf
-	LogI = Log.Infof
-	LogW = Log.Warnf
-	LogE = Log.Errorf
-	LogF = Log.Fatalf
 	Logf = Log.Logf
 )
+
+// LogD logs at Debug level and fires registered hooks.
+func LogD(format string, args ...interface{}) {
+	Log.Debugf(format, args...)
+	fireHooks("debug", fmt.Sprintf(format, args...))
+}
+
+// LogI logs at Info level and fires registered hooks.
+func LogI(format string, args ...interface{}) {
+	Log.Infof(format, args...)
+	fireHooks("info", fmt.Sprintf(format, args...))
+}
+
+// LogW logs at Warning level and fires registered hooks.
+func LogW(format string, args ...interface{}) {
+	Log.Warnf(format, args...)
+	fireHooks("warn", fmt.Sprintf(format, args...))
+}
+
+// LogE logs at Error level and fires registered hooks.
+func LogE(format string, args ...interface{}) {
+	Log.Errorf(format, args...)
+	fireHooks("error", fmt.Sprintf(format, args...))
+}
+
+// LogF logs at Fatal level and fires registered hooks synchronously before exit.
+// Hooks fire BEFORE Log.Fatalf because Fatalf calls os.Exit.
+func LogF(format string, args ...interface{}) {
+	fireHooks("fatal", fmt.Sprintf(format, args...))
+	Log.Fatalf(format, args...)
+}
 
 var GinLevel golog.Level = 6
 
