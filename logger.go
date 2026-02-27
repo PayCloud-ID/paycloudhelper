@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	Log      = phlogger.Log
-	Logf     = Log.Logf
+	Log                  = phlogger.Log
+	Logf                 = Log.Logf
 	GinLevel golog.Level = phlogger.GinLevel
 )
 

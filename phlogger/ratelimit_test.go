@@ -1,4 +1,5 @@
 package phlogger
+package phlogger
 
 import (
 	"testing"
