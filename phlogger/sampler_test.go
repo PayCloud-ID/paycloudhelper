@@ -108,7 +108,7 @@ func TestSamplerConfigForEnv_Staging(t *testing.T) {
 
 func TestSamplerConfigForEnv_Dev(t *testing.T) {
 	cfg := SamplerConfigForEnv("develop")
-	if cfg.Initial != 0 {
+	if cfg.Initial != 20 {
 		t.Errorf("dev should disable sampling, got Initial=%d", cfg.Initial)
 	}
 	cfg2 := SamplerConfigForEnv("")

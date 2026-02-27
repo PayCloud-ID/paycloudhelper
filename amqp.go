@@ -118,7 +118,6 @@ func NewAmqp(addr string, c *AmqpClient) {
 
 		go c.handleReconnect(addr)
 	}
-	return
 }
 
 // NewAmqpClient creates a new consumer state instance, and automatically
@@ -249,6 +248,19 @@ func (c *AmqpClient) init(conn *amqp.Connection) error {
 	}
 
 	if ex, errEx := c.checkIfQueueExists(ch); !ex || errEx != nil {
+		c.infoLog.Printf("[AMQP] queue does not exist, declaring queue=%s\n", c.queueName)
+
+		// QueueDeclarePassive causes the broker to close the channel on failure
+		// (AMQP 404/channel-error). Open a fresh channel before declaring the queue.
+		ch, err = conn.Channel()
+		if err != nil {
+			return err
+		}
+		err = ch.Confirm(false)
+		if err != nil {
+			return err
+		}
+
 		_, err = ch.QueueDeclare(
 			c.queueName,
 			true,  // Durable
@@ -258,6 +270,7 @@ func (c *AmqpClient) init(conn *amqp.Connection) error {
 			nil,   // Arguments
 		)
 		if err != nil {
+			c.errLog.Printf("[AMQP] failed to declare queue=%s err=%v\n", c.queueName, err)
 			return err
 		}
 	}
@@ -302,7 +315,7 @@ func (c *AmqpClient) Push(data []byte) error {
 	for {
 		err := c.UnsafePush(data)
 		if err != nil {
-			//c.errLog.Println("[AMQP] push failed. Retrying...")
+			// c.errLog.Printf("[AMQP] push failed. Retrying... err=%v\n", err)
 			select {
 			case <-c.done:
 				return errShutdown

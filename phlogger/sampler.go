@@ -32,6 +32,8 @@ func SamplerConfigForEnv(env string) SamplerConfig {
 		return SamplerConfig{Initial: 5, Thereafter: 50, Period: time.Second}
 	case "staging", "stg":
 		return SamplerConfig{Initial: 10, Thereafter: 10, Period: time.Second}
+	case "develop", "developement", "dev":
+		return SamplerConfig{Initial: 20, Thereafter: 20, Period: time.Second}
 	default:
 		return SamplerConfig{} // disabled — all logs pass through
 	}

@@ -283,28 +283,23 @@ func sendToSentry(msg interface{}, msgType string, args ...string) {
 		if v, ok := msg.(string); ok && v != "" {
 			SendToSentryMessage(v, service, module, function)
 		}
-		break
 	case "debug":
 		if v, ok := msg.(error); ok && v != nil {
 			SendToSentryDebug(v, service, module, function)
 		}
-		break
 	case "warning":
 		if v, ok := msg.(error); ok && v != nil {
 			SendToSentryWarning(v, service, module, function)
 		}
-		break
 	case "event":
 		if v, ok := msg.(*sentry.Event); ok && v != nil {
 			SendToSentryEvent(v, service, module, function)
 		}
-		break
 	case "error":
 	default:
 		if v, ok := msg.(error); ok && v != nil {
 			SendToSentryError(v, service, module, function)
 		}
-		break
 	}
 }
 
