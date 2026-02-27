@@ -60,7 +60,7 @@ pch.ConfigureLogForwarding(pch.LogForwardConfig{
 | Package | Path | Purpose |
 |---------|------|---------|
 | Root | `.` | Public API — all below re-exported here |
-| `phlogger` | `phlogger/` | Logger wrapper (`kataras/golog`) + rate limiter + forwarding hooks |
+| `phlogger` | `phlogger/` | Logger wrapper (`kataras/golog`) + sampler + context logger + metrics hooks + KeyedLimiter + forwarding hooks |
 | `phsentry` | `phsentry/` | Sentry error tracking, log receiver |
 | `phhelper` | `phhelper/` | Global state (`APP_NAME`, `APP_ENV`), JSON/string helpers |
 | `phaudittrailv0` | `phaudittrailv0/` | Legacy v0 audit trail (RabbitMQ) |
@@ -82,24 +82,91 @@ pch.LogJ(obj)                                // JSON (compact)
 pch.LogJI(obj)                               // JSON (indented)
 ```
 
-#### Default Rate Limiting
+#### Sampled Logging (Default Behavior)
 
-All log functions (`LogI`, `LogE`, `LogW`, `LogD`, `LogF`) automatically rate-limit identical log lines using the **format string as key** with a **50ms default window**. Within 50ms, duplicate calls to the same format string are silently dropped; when the window expires the next emit appends `[+N suppressed]`.
+All log functions (`LogI`, `LogE`, `LogW`, `LogD`, `LogF`) are **sampled by default** using the format string as key. The sampler uses an **Initial/Thereafter** pattern per time period:
 
-This cannot be disabled for plain `LogI/LogE` etc. — use `phlogger.Log.Infof()` directly if you need raw output.
+| Environment | Initial | Thereafter | Period | Behavior |
+|-------------|---------|------------|--------|----------|
+| `production` / `prod` | 5 | 50 | 1s | First 5/sec per key, then every 50th |
+| `staging` / `stg` | 10 | 10 | 1s | First 10/sec, then every 10th |
+| `develop` / `""` (default) | 0 (disabled) | — | — | All logs pass through |
 
-#### Rate-Limited Logging with Custom Key
+The sampler is initialized automatically from `APP_ENV`. Override at startup:
 
 ```go
-// Custom key isolates the rate-limit bucket from the format string.
-// Uses the default 50ms window:
+pch.InitializeSampler(pch.SamplerConfig{
+    Initial:    3,
+    Thereafter: 100,
+    Period:     time.Second,
+})
+```
+
+When suppressed logs are emitted, the message includes `[+N suppressed]`.
+
+#### Sampled Logging with Custom Key
+
+```go
+// Custom key isolates sampling from the format string.
+// Uses the global sampler config (env-aware):
 pch.LogIRated("cache.miss", "[FuncName] cache miss key=%s", key)
 pch.LogERated("db.error", "[FuncName] db error: %v", err)
 
-// Explicit window override (when 50ms is too tight/loose):
+// Explicit time-window override (bypasses sampler, uses simple dedup):
 pch.LogIRatedW("cache.miss", 5*time.Second, "[FuncName] cache miss key=%s", key)
 pch.LogERatedW("db.error", 500*time.Millisecond, "[FuncName] db error: %v", err)
 ```
+
+#### Context Logger (Request-Scoped Fields)
+
+`LogContext` is a child logger that prepends key-value fields to every message.
+Useful for request-scoped or operation-scoped logging:
+
+```go
+ctx := pch.NewLogContext("req_id", "abc-123", "merchant", "M001")
+ctx.LogI("processing payment amount=%d", 5000)
+// output: [req_id=abc-123 merchant=M001] processing payment amount=5000
+
+ctx.LogE("payment failed: %v", err)
+// output: [req_id=abc-123 merchant=M001] payment failed: timeout
+
+// Add more fields without losing parent context:
+child := ctx.With("step", "validate")
+child.LogI("checking input")
+// output: [req_id=abc-123 merchant=M001 step=validate] checking input
+```
+
+#### Metrics Hooks (High-Frequency Events)
+
+For events that happen thousands of times per second, measure instead of logging.
+Register a hook once at startup — no prometheus dependency in the library:
+
+```go
+// Wire your own counter backend (prometheus, statsd, etc.)
+pch.RegisterMetricsHook(func(event string, count int64) {
+    myPromCounter.WithLabelValues(event).Add(float64(count))
+})
+
+// Then in hot paths:
+pch.IncrementMetric("cache.miss")
+pch.IncrementMetricBy("batch.processed", int64(batchSize))
+```
+
+If no hook is registered, calls are no-ops (zero overhead).
+
+#### KeyedLimiter (Token Bucket)
+
+For precise per-key rate control (max N events/sec), use `KeyedLimiter` instead of the sampler:
+
+```go
+limiter := pch.NewKeyedLimiter(10, 1)  // 10 events/sec, burst 1
+
+if limiter.Allow("db.timeout") {
+    pch.LogE("[Handler] database timeout host=%s", host)
+}
+```
+
+Each key gets an independent token bucket. Tokens refill at the configured rate.
 
 #### Log Forwarding to Sentry
 

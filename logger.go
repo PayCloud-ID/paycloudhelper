@@ -8,6 +8,24 @@ import (
 	"github.com/kataras/golog"
 )
 
+// ── Re-exported types for consumer convenience ────────────────────────────────
+
+// SamplerConfig controls log sampling behavior per key per period.
+// See phlogger.SamplerConfig for full documentation.
+type SamplerConfig = phlogger.SamplerConfig
+
+// LogContext is a child logger with key-value context prefix.
+// See phlogger.LogContext for full documentation.
+type LogContext = phlogger.LogContext
+
+// MetricsHook is a callback for high-frequency event counting.
+// See phlogger.MetricsHook for full documentation.
+type MetricsHook = phlogger.MetricsHook
+
+// KeyedLimiter provides per-key token bucket rate limiting.
+// See phlogger.KeyedLimiter for full documentation.
+type KeyedLimiter = phlogger.KeyedLimiter
+
 var (
 	Log                  = phlogger.Log
 	Logf                 = Log.Logf
@@ -77,6 +95,59 @@ func LogWRatedW(key string, window time.Duration, format string, args ...interfa
 // LogDRatedW logs at Debug level with rate limiting using key and an explicit window.
 func LogDRatedW(key string, window time.Duration, format string, args ...interface{}) {
 	phlogger.LogDRatedW(key, window, format, args...)
+}
+
+// ── Sampler configuration ─────────────────────────────────────────────────────
+
+// InitializeSampler sets the global sampler config.
+// Called automatically by InitializeLogger() with env-aware defaults.
+// Use to override defaults at startup.
+func InitializeSampler(cfg SamplerConfig) {
+	phlogger.InitializeSampler(cfg)
+}
+
+// SamplerConfigForEnv returns production-tuned sampler defaults for the given environment.
+func SamplerConfigForEnv(env string) SamplerConfig {
+	return phlogger.SamplerConfigForEnv(env)
+}
+
+// SamplerConfigFromAppEnv returns a SamplerConfig based on APP_ENV.
+func SamplerConfigFromAppEnv() SamplerConfig {
+	return phlogger.SamplerConfigFromAppEnv()
+}
+
+// ── Context logger ────────────────────────────────────────────────────────────
+
+// NewLogContext creates a child logger with key-value context fields.
+// Fields are prepended as [key=value key2=value2] to every message.
+func NewLogContext(fields ...string) *LogContext {
+	return phlogger.NewLogContext(fields...)
+}
+
+// ── Metrics hooks ─────────────────────────────────────────────────────────────
+
+// RegisterMetricsHook sets the global metrics callback for high-frequency events.
+// Consumers wire their own backend (prometheus, statsd, etc.).
+func RegisterMetricsHook(hook MetricsHook) {
+	phlogger.RegisterMetricsHook(hook)
+}
+
+// IncrementMetric records one occurrence of a named event via the registered hook.
+func IncrementMetric(event string) {
+	phlogger.IncrementMetric(event)
+}
+
+// IncrementMetricBy records `n` occurrences of a named event via the registered hook.
+func IncrementMetricBy(event string, n int64) {
+	phlogger.IncrementMetricBy(event, n)
+}
+
+// ── KeyedLimiter (token bucket) ───────────────────────────────────────────────
+
+// NewKeyedLimiter creates a per-key token bucket limiter.
+// r is events/second, burst is max burst per key.
+func NewKeyedLimiter(r float64, burst int) *KeyedLimiter {
+	return phlogger.NewKeyedLimiter(r, burst)
 }
 
 func InitializeLogger() {

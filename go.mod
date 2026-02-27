@@ -8,16 +8,17 @@ require (
 	dario.cat/mergo v1.0.2
 	github.com/bytedance/sonic v1.14.0
 	github.com/getsentry/sentry-go v0.33.0
+	github.com/go-redsync/redsync/v4 v4.13.0
 	github.com/joho/godotenv v1.5.1
 	github.com/kataras/golog v0.1.12
 	github.com/kataras/pio v0.0.13
 	github.com/rabbitmq/amqp091-go v1.10.0
+	golang.org/x/time v0.3.0
 )
 
 require (
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
 	github.com/cloudwego/base64x v0.1.5 // indirect
-	github.com/go-redsync/redsync/v4 v4.13.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
