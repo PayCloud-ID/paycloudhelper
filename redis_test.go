@@ -267,10 +267,10 @@ func TestRedisContextCancellation(t *testing.T) {
 // TestRedisRetryLogic tests retry logic for Redis operations
 func TestRedisRetryLogic(t *testing.T) {
 	tests := []struct {
-		name           string
-		maxRetries     int
-		retryDelay     time.Duration
-		shouldSucceed  bool
+		name          string
+		maxRetries    int
+		retryDelay    time.Duration
+		shouldSucceed bool
 	}{
 		{
 			name:          "retry with max retries",
@@ -308,29 +308,29 @@ func TestRedisRetryLogic(t *testing.T) {
 // TestRedisConnectionPooling tests connection pool behavior
 func TestRedisConnectionPooling(t *testing.T) {
 	tests := []struct {
-		name             string
-		poolSize         int
-		wantError        bool
+		name      string
+		poolSize  int
+		wantError bool
 	}{
 		{
-			name:             "default pool size",
-			poolSize:         10,
-			wantError:        false,
+			name:      "default pool size",
+			poolSize:  10,
+			wantError: false,
 		},
 		{
-			name:             "large pool size",
-			poolSize:         100,
-			wantError:        false,
+			name:      "large pool size",
+			poolSize:  100,
+			wantError: false,
 		},
 		{
-			name:             "minimum pool size",
-			poolSize:         1,
-			wantError:        false,
+			name:      "minimum pool size",
+			poolSize:  1,
+			wantError: false,
 		},
 		{
-			name:             "zero pool size",
-			poolSize:         0,
-			wantError:        true,
+			name:      "zero pool size",
+			poolSize:  0,
+			wantError: true,
 		},
 	}
 
@@ -346,34 +346,34 @@ func TestRedisConnectionPooling(t *testing.T) {
 // TestRedisTimeoutHandling tests timeout configuration
 func TestRedisTimeoutHandling(t *testing.T) {
 	tests := []struct {
-		name             string
-		timeout          time.Duration
-		readTimeout      time.Duration
-		wantError        bool
+		name        string
+		timeout     time.Duration
+		readTimeout time.Duration
+		wantError   bool
 	}{
 		{
-			name:             "default timeout",
-			timeout:          time.Second,
-			readTimeout:      3 * time.Second,
-			wantError:        false,
+			name:        "default timeout",
+			timeout:     time.Second,
+			readTimeout: 3 * time.Second,
+			wantError:   false,
 		},
 		{
-			name:             "custom timeout",
-			timeout:          500 * time.Millisecond,
-			readTimeout:      time.Second,
-			wantError:        false,
+			name:        "custom timeout",
+			timeout:     500 * time.Millisecond,
+			readTimeout: time.Second,
+			wantError:   false,
 		},
 		{
-			name:             "zero timeout",
-			timeout:          0,
-			readTimeout:      time.Second,
-			wantError:        true,
+			name:        "zero timeout",
+			timeout:     0,
+			readTimeout: time.Second,
+			wantError:   true,
 		},
 		{
-			name:             "negative timeout",
-			timeout:          -time.Second,
-			readTimeout:      time.Second,
-			wantError:        true,
+			name:        "negative timeout",
+			timeout:     -time.Second,
+			readTimeout: time.Second,
+			wantError:   true,
 		},
 	}
 
@@ -431,10 +431,10 @@ func TestRedisErrorHandling(t *testing.T) {
 // TestRedisMutexOperations tests mutex operations for locks
 func TestRedisMutexOperations(t *testing.T) {
 	tests := []struct {
-		name       string
-		mutexKey   string
-		operation  string
-		wantError  bool
+		name      string
+		mutexKey  string
+		operation string
+		wantError bool
 	}{
 		{
 			name:      "store mutex",
