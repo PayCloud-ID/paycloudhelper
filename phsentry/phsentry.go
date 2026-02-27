@@ -1,11 +1,13 @@
 package phsentry
 
 import (
+	"context"
+	"time"
+
+	"bitbucket.org/paycloudid/paycloudhelper/phhelper"
 	"bitbucket.org/paycloudid/paycloudhelper/phlogger"
 	"dario.cat/mergo"
 	"github.com/getsentry/sentry-go"
-	"os"
-	"time"
 )
 
 var (
@@ -108,8 +110,8 @@ func InitSentry(options SentryOptions) *sentry.Client {
 
 		//setup sentry breadcrumb data
 		sd := &SentryData{
-			Service:  os.Getenv("APP_NAME"),
-			Module:   os.Getenv("APP_ENV"),
+			Service:  phhelper.GetAppName(),
+			Module:   phhelper.GetAppEnv(),
 			Function: "paycloud-be-func",
 		}
 		if options.Data != nil {
@@ -399,4 +401,21 @@ func addDefaultBreadcrumb(scope *sentry.Scope, level, message string) {
 		Message:  message,
 		Data:     GetSentryDataMap(),
 	}, 10)
+}
+
+// SendSentryErrorWithContext sends an error to Sentry with request context.
+// ctx may carry a Sentry Hub (set by middleware); falls back to global client.
+func SendSentryErrorWithContext(ctx context.Context, err error, args ...string) {
+	if err == nil || sentryClient == nil {
+		return
+	}
+	hub := sentry.GetHubFromContext(ctx)
+	if hub == nil {
+		hub = sentry.NewHub(sentryClient, sentry.NewScope())
+	}
+	hub.WithScope(func(scope *sentry.Scope) {
+		scope.SetLevel(sentry.LevelError)
+		addDefaultBreadcrumb(scope, "error", err.Error())
+		hub.CaptureException(err)
+	})
 }
