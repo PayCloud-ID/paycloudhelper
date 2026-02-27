@@ -1,6 +1,7 @@
 package paycloudhelper
 
 import (
+	"context"
 	"time"
 
 	"bitbucket.org/paycloudid/paycloudhelper/phsentry"
@@ -80,4 +81,10 @@ func FlushSentry(timeout time.Duration) {
 // SentryEnabled returns true if Sentry has been initialized.
 func SentryEnabled() bool {
 	return phsentry.SentryEnabled()
+}
+
+// SendSentryErrorWithContext captures an error with request context (e.g. from Echo).
+// Extra string args are passed through to phsentry for breadcrumb metadata.
+func SendSentryErrorWithContext(ctx context.Context, err error, args ...string) {
+	phsentry.SendSentryErrorWithContext(ctx, err, args...)
 }
