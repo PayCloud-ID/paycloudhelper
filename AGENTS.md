@@ -139,11 +139,28 @@ e.Use(RevokeToken)      // Validates JWT + revocation check in Redis
 
 ## Versioning
 
-| Bump | When |
-|------|------|
-| **PATCH** | Bug fixes, zero behavior change |
-| **MINOR** | New backward-compatible features |
-| **MAJOR** | Breaking changes (requires updating all consumers) |
+| Bump | When | Examples |
+|------|------|---------|
+| **PATCH** | Bug fix, zero behavior change, no new public API | Fix nil panic, fix typo in log message |
+| **MINOR** | New backward-compatible additions (new functions, new optional config) | `ConfigureLogForwarding()`, `LogIRated()` |
+| **MAJOR** | Any breaking change to existing public API signatures OR removal of exported symbols | Rename `InitSentry` params, remove `LogErr` |
+
+### Breaking Change Decision Tree
+
+```
+Does the change touch an EXISTING exported function signature?
+├─ YES → MAJOR bump required. Coordinate consumer updates first.
+└─ NO  → Does it add new exported symbols?
+          ├─ YES → MINOR bump (v1.X.0)
+          └─ NO  → PATCH bump (v1.6.X)
+```
+
+### Backward-Compatibility Contract
+
+- NEVER change existing exported function signatures
+- NEVER remove exported symbols without a deprecation cycle (MINOR → MAJOR)
+- New optional parameters → use variadic `opts ...Option` pattern
+- Deprecated functions retain original signature + route to new implementation
 
 **Known retractions:** v1.6.3 (verbose Redis logs), v1.6.0 (audit trail race), v1.5.2 (nil panic on init)
 
