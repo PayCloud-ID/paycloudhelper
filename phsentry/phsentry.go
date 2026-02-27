@@ -5,6 +5,7 @@ import (
 	"dario.cat/mergo"
 	"github.com/getsentry/sentry-go"
 	"os"
+	"time"
 )
 
 var (
@@ -338,4 +339,64 @@ func SendSentryEvent(event *sentry.Event, args ...string) {
 		return
 	}
 	sendToSentry(event, "event", args...)
+}
+
+// ReceiveLog forwards a log event to Sentry based on the level.
+// This is called by log hook subscribers — do not call directly.
+// level: "debug" | "info" | "warn" | "error" | "fatal"
+// message: formatted log string
+func ReceiveLog(level, message string) {
+	if sentryClient == nil {
+		return
+	}
+	hub := sentry.NewHub(sentryClient, sentry.NewScope())
+	hub.WithScope(func(scope *sentry.Scope) {
+		scope.SetLevel(sentryLevelFor(level))
+		addDefaultBreadcrumb(scope, level, message)
+		hub.CaptureMessage(message)
+	})
+}
+
+// FlushSentry waits for buffered Sentry events to be sent, up to timeout.
+// Call this before process exit (e.g. in shutdown handler) to avoid losing events.
+func FlushSentry(timeout time.Duration) {
+	if sentryClient == nil {
+		return
+	}
+	sentryClient.Flush(timeout)
+}
+
+// SentryEnabled returns true if a Sentry client has been initialized.
+// Use this to guard expensive error construction before calling SendSentryError.
+func SentryEnabled() bool {
+	return sentryClient != nil
+}
+
+// sentryLevelFor maps log level strings to sentry.Level.
+func sentryLevelFor(level string) sentry.Level {
+	switch level {
+	case "fatal":
+		return sentry.LevelFatal
+	case "error":
+		return sentry.LevelError
+	case "warn":
+		return sentry.LevelWarning
+	case "info":
+		return sentry.LevelInfo
+	default:
+		return sentry.LevelDebug
+	}
+}
+
+// addDefaultBreadcrumb adds service context to a Sentry scope.
+func addDefaultBreadcrumb(scope *sentry.Scope, level, message string) {
+	if sentryBreadcrumbData == nil {
+		return
+	}
+	scope.AddBreadcrumb(&sentry.Breadcrumb{
+		Type:     "default",
+		Category: level,
+		Message:  message,
+		Data:     GetSentryDataMap(),
+	}, 10)
 }
