@@ -1,16 +1,14 @@
 module bitbucket.org/paycloudid/paycloudhelper
 
-go 1.24.0
-
-toolchain go1.24.3
+go 1.25.0
 
 require (
 	dario.cat/mergo v1.0.2
 	github.com/bytedance/sonic v1.15.0
 	github.com/getsentry/sentry-go v0.43.0
-	github.com/go-redsync/redsync/v4 v4.15.0
+	github.com/go-redsync/redsync/v4 v4.16.0
 	github.com/joho/godotenv v1.5.1
-	github.com/kataras/golog v0.1.13
+	github.com/kataras/golog v0.1.15
 	github.com/kataras/pio v0.0.14
 	github.com/rabbitmq/amqp091-go v1.10.0
 	golang.org/x/time v0.14.0
@@ -42,10 +40,10 @@ require (
 	github.com/thedevsaddam/govalidator v1.9.10
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
-	golang.org/x/crypto v0.46.0 // indirect
-	golang.org/x/net v0.48.0 // indirect
-	golang.org/x/sys v0.39.0 // indirect
-	golang.org/x/text v0.32.0 // indirect
+	golang.org/x/crypto v0.48.0 // indirect
+	golang.org/x/net v0.51.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/text v0.34.0 // indirect
 )
 
 retract (
