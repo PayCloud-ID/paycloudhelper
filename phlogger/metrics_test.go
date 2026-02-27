@@ -1,5 +1,4 @@
 package phlogger
-package phlogger
 
 import (
 	"sync"
