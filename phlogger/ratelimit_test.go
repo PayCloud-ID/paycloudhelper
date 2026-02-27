@@ -1,5 +1,4 @@
 package phlogger
-package phlogger
 
 import (
 	"testing"
@@ -67,19 +66,52 @@ func TestRateLimiter_ZeroWindow_AlwaysAllows(t *testing.T) {
 
 func TestLogIRated_SuppressesInWindow(t *testing.T) {
 	key := "test.LogIRated.suppress"
-	window := 500 * time.Millisecond
 
 	// Reset global limiter state for this key
 	globalRateLimiter.entries.Delete(key)
 
 	// First call should emit (no panic, no error)
-	LogIRated(key, window, "test emit")
+	LogIRated(key, "test emit")
 
-	// Second/third call within window should be suppressed
-	LogIRated(key, window, "should be suppressed")
-	LogIRated(key, window, "should be suppressed 2")
+	// Second/third call within default 50ms window should be suppressed
+	LogIRated(key, "should be suppressed")
+	LogIRated(key, "should be suppressed 2")
 
 	// After window, next call should emit with suppressed count
-	time.Sleep(window + 10*time.Millisecond)
-	LogIRated(key, window, "after window") // should log "[+2 suppressed]"
+	time.Sleep(defaultWindow + 10*time.Millisecond)
+	LogIRated(key, "after window") // should log "[+2 suppressed]"
+}
+
+func TestLogIRatedW_UsesCustomWindow(t *testing.T) {
+	key := "test.LogIRatedW.custom"
+	customWindow := 200 * time.Millisecond
+	globalRateLimiter.entries.Delete(key)
+
+	LogIRatedW(key, customWindow, "first emit")
+
+	// Should be suppressed within custom window
+	LogIRatedW(key, customWindow, "suppressed within custom window")
+
+	// After custom window, should emit
+	time.Sleep(customWindow + 10*time.Millisecond)
+	LogIRatedW(key, customWindow, "after custom window")
+}
+
+func TestLogI_RateLimitsOnFormatString(t *testing.T) {
+	format := "test.default.ratelimit key=%s"
+
+	// Reset limiter state for this format
+	globalRateLimiter.entries.Delete(format)
+
+	// First call should be allowed
+	allowed1, _ := globalRateLimiter.check(format, defaultWindow)
+	if !allowed1 {
+		t.Fatal("first LogI call should be allowed")
+	}
+
+	// Second call within 50ms should be suppressed
+	allowed2, _ := globalRateLimiter.check(format, defaultWindow)
+	if allowed2 {
+		t.Fatal("second LogI call within defaultWindow should be suppressed")
+	}
 }

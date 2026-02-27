@@ -8,17 +8,17 @@ type LogForwardConfig struct {
 	ForwardDebug bool // Forward Debug logs (default: false)
 	ForwardInfo  bool // Forward Info logs (default: false)
 	ForwardWarn  bool // Forward Warning logs (default: false)
-	ForwardError bool // Forward Error logs (default: false)
+	ForwardError bool // Forward Error logs (default: true)
 	ForwardFatal bool // Forward Fatal logs (default: true)
 }
 
 // LogForwardConfigFromEnv constructs a LogForwardConfig reading from environment variables.
-// Variables: LOG_FORWARD_FATAL (default "true"), LOG_FORWARD_ERROR, LOG_FORWARD_WARN,
-// LOG_FORWARD_INFO, LOG_FORWARD_DEBUG (default "false").
+// Variables: LOG_FORWARD_FATAL (default "true"), LOG_FORWARD_ERROR (default "true"),
+// LOG_FORWARD_WARN, LOG_FORWARD_INFO, LOG_FORWARD_DEBUG (default "false").
 func LogForwardConfigFromEnv() LogForwardConfig {
 	return LogForwardConfig{
 		ForwardFatal: getEnvBool("LOG_FORWARD_FATAL", true),
-		ForwardError: getEnvBool("LOG_FORWARD_ERROR", false),
+		ForwardError: getEnvBool("LOG_FORWARD_ERROR", true),
 		ForwardWarn:  getEnvBool("LOG_FORWARD_WARN", false),
 		ForwardInfo:  getEnvBool("LOG_FORWARD_INFO", false),
 		ForwardDebug: getEnvBool("LOG_FORWARD_DEBUG", false),

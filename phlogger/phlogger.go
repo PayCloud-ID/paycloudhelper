@@ -14,35 +14,103 @@ var (
 	Logf = Log.Logf
 )
 
-// LogD logs at Debug level and fires registered hooks.
-func LogD(format string, args ...interface{}) {
+// ── Internal emit helpers ────────────────────────────────────────────────────
+// These bypass rate limiting and are the single point that calls golog + hooks.
+
+func emitD(format string, args ...interface{}) {
 	Log.Debugf(format, args...)
 	fireHooks("debug", fmt.Sprintf(format, args...))
 }
 
-// LogI logs at Info level and fires registered hooks.
-func LogI(format string, args ...interface{}) {
+func emitI(format string, args ...interface{}) {
 	Log.Infof(format, args...)
 	fireHooks("info", fmt.Sprintf(format, args...))
 }
 
-// LogW logs at Warning level and fires registered hooks.
-func LogW(format string, args ...interface{}) {
+func emitW(format string, args ...interface{}) {
 	Log.Warnf(format, args...)
 	fireHooks("warn", fmt.Sprintf(format, args...))
 }
 
-// LogE logs at Error level and fires registered hooks.
-func LogE(format string, args ...interface{}) {
+func emitE(format string, args ...interface{}) {
 	Log.Errorf(format, args...)
 	fireHooks("error", fmt.Sprintf(format, args...))
 }
 
-// LogF logs at Fatal level and fires registered hooks synchronously before exit.
-// Hooks fire BEFORE Log.Fatalf because Fatalf calls os.Exit.
-func LogF(format string, args ...interface{}) {
+func emitF(format string, args ...interface{}) {
+	// Hooks fire BEFORE Fatalf because Fatalf calls os.Exit.
 	fireHooks("fatal", fmt.Sprintf(format, args...))
 	Log.Fatalf(format, args...)
+}
+
+// ── Public log functions (rate-limited by default) ───────────────────────────
+// Each public function rate-limits using the format string as key and
+// defaultWindow (50ms). Duplicate lines within 50ms are suppressed silently.
+
+// LogD logs at Debug level.
+func LogD(format string, args ...interface{}) {
+	allowed, suppressed := globalRateLimiter.check(format, defaultWindow)
+	if !allowed {
+		return
+	}
+	if suppressed > 0 {
+		format += " [+%d suppressed]"
+		args = append(args, suppressed)
+	}
+	emitD(format, args...)
+}
+
+// LogI logs at Info level.
+func LogI(format string, args ...interface{}) {
+	allowed, suppressed := globalRateLimiter.check(format, defaultWindow)
+	if !allowed {
+		return
+	}
+	if suppressed > 0 {
+		format += " [+%d suppressed]"
+		args = append(args, suppressed)
+	}
+	emitI(format, args...)
+}
+
+// LogW logs at Warning level.
+func LogW(format string, args ...interface{}) {
+	allowed, suppressed := globalRateLimiter.check(format, defaultWindow)
+	if !allowed {
+		return
+	}
+	if suppressed > 0 {
+		format += " [+%d suppressed]"
+		args = append(args, suppressed)
+	}
+	emitW(format, args...)
+}
+
+// LogE logs at Error level.
+func LogE(format string, args ...interface{}) {
+	allowed, suppressed := globalRateLimiter.check(format, defaultWindow)
+	if !allowed {
+		return
+	}
+	if suppressed > 0 {
+		format += " [+%d suppressed]"
+		args = append(args, suppressed)
+	}
+	emitE(format, args...)
+}
+
+// LogF logs at Fatal level. Rate-limited by format string key.
+// Hooks fire synchronously before os.Exit.
+func LogF(format string, args ...interface{}) {
+	allowed, suppressed := globalRateLimiter.check(format, defaultWindow)
+	if !allowed {
+		return
+	}
+	if suppressed > 0 {
+		format += " [+%d suppressed]"
+		args = append(args, suppressed)
+	}
+	emitF(format, args...)
 }
 
 var GinLevel golog.Level = 6
@@ -80,57 +148,59 @@ func LogErr(err error) {
 	Log.Error(err)
 }
 
-// LogIRated logs at Info level with rate limiting.
-// key identifies the log site (e.g. "cache.miss"). window is the suppression duration.
-// If window <= 0, rate limiting is disabled and every call emits.
-// When a suppressed window ends, the log message includes "[+N suppressed]".
-func LogIRated(key string, window time.Duration, format string, args ...interface{}) {
-	allowed, suppressed := globalRateLimiter.check(key, window)
-	if !allowed {
-		return
-	}
-	if suppressed > 0 {
-		format = format + " [+%d suppressed]"
-		args = append(args, suppressed)
-	}
-	LogI(format, args...)
+// ── Rate-limited variants with custom key ─────────────────────────────────────
+// Use these when the format string is not a stable identifier (e.g. it contains
+// a variable value). key should be a stable string like "cache.miss".
+
+// LogIRated logs at Info level with rate limiting using key and the default 50ms window.
+func LogIRated(key string, format string, args ...interface{}) {
+	logRated(key, defaultWindow, emitI, format, args...)
 }
 
-// LogERated logs at Error level with rate limiting. See LogIRated for semantics.
-func LogERated(key string, window time.Duration, format string, args ...interface{}) {
-	allowed, suppressed := globalRateLimiter.check(key, window)
-	if !allowed {
-		return
-	}
-	if suppressed > 0 {
-		format = format + " [+%d suppressed]"
-		args = append(args, suppressed)
-	}
-	LogE(format, args...)
+// LogERated logs at Error level with rate limiting using key and the default 50ms window.
+func LogERated(key string, format string, args ...interface{}) {
+	logRated(key, defaultWindow, emitE, format, args...)
 }
 
-// LogWRated logs at Warning level with rate limiting. See LogIRated for semantics.
-func LogWRated(key string, window time.Duration, format string, args ...interface{}) {
-	allowed, suppressed := globalRateLimiter.check(key, window)
-	if !allowed {
-		return
-	}
-	if suppressed > 0 {
-		format = format + " [+%d suppressed]"
-		args = append(args, suppressed)
-	}
-	LogW(format, args...)
+// LogWRated logs at Warning level with rate limiting using key and the default 50ms window.
+func LogWRated(key string, format string, args ...interface{}) {
+	logRated(key, defaultWindow, emitW, format, args...)
 }
 
-// LogDRated logs at Debug level with rate limiting. See LogIRated for semantics.
-func LogDRated(key string, window time.Duration, format string, args ...interface{}) {
+// LogDRated logs at Debug level with rate limiting using key and the default 50ms window.
+func LogDRated(key string, format string, args ...interface{}) {
+	logRated(key, defaultWindow, emitD, format, args...)
+}
+
+// LogIRatedW logs at Info level with rate limiting using key and an explicit window.
+func LogIRatedW(key string, window time.Duration, format string, args ...interface{}) {
+	logRated(key, window, emitI, format, args...)
+}
+
+// LogERatedW logs at Error level with rate limiting using key and an explicit window.
+func LogERatedW(key string, window time.Duration, format string, args ...interface{}) {
+	logRated(key, window, emitE, format, args...)
+}
+
+// LogWRatedW logs at Warning level with rate limiting using key and an explicit window.
+func LogWRatedW(key string, window time.Duration, format string, args ...interface{}) {
+	logRated(key, window, emitW, format, args...)
+}
+
+// LogDRatedW logs at Debug level with rate limiting using key and an explicit window.
+func LogDRatedW(key string, window time.Duration, format string, args ...interface{}) {
+	logRated(key, window, emitD, format, args...)
+}
+
+// logRated is the shared rate-limiting + emit logic for all *Rated variants.
+func logRated(key string, window time.Duration, emit func(string, ...interface{}), format string, args ...interface{}) {
 	allowed, suppressed := globalRateLimiter.check(key, window)
 	if !allowed {
 		return
 	}
 	if suppressed > 0 {
-		format = format + " [+%d suppressed]"
+		format += " [+%d suppressed]"
 		args = append(args, suppressed)
 	}
-	LogD(format, args...)
+	emit(format, args...)
 }

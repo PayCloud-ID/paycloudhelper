@@ -39,11 +39,11 @@ func TestConfigureLogForwarding_RegistersHooksForEnabledLevels(t *testing.T) {
 
 func TestLogForwardConfigFromEnv_ReturnsConfig(t *testing.T) {
 	cfg := LogForwardConfigFromEnv()
-	// Default: ForwardFatal=true, rest=false
+	// Default: ForwardFatal=true, ForwardError=true, rest=false
 	if !cfg.ForwardFatal {
 		t.Error("ForwardFatal should default to true")
 	}
-	if cfg.ForwardError {
-		t.Error("ForwardError should default to false")
+	if !cfg.ForwardError {
+		t.Error("ForwardError should default to true")
 	}
 }

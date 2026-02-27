@@ -39,24 +39,44 @@ func LogF(format string, args ...interface{}) {
 	phlogger.LogF(format, args...)
 }
 
-// LogIRated logs at Info level with rate limiting. key identifies the log site.
-func LogIRated(key string, window time.Duration, format string, args ...interface{}) {
-	phlogger.LogIRated(key, window, format, args...)
+// LogIRated logs at Info level with rate limiting using key and the default 50ms window.
+func LogIRated(key string, format string, args ...interface{}) {
+	phlogger.LogIRated(key, format, args...)
 }
 
-// LogERated logs at Error level with rate limiting.
-func LogERated(key string, window time.Duration, format string, args ...interface{}) {
-	phlogger.LogERated(key, window, format, args...)
+// LogERated logs at Error level with rate limiting using key and the default 50ms window.
+func LogERated(key string, format string, args ...interface{}) {
+	phlogger.LogERated(key, format, args...)
 }
 
-// LogWRated logs at Warning level with rate limiting.
-func LogWRated(key string, window time.Duration, format string, args ...interface{}) {
-	phlogger.LogWRated(key, window, format, args...)
+// LogWRated logs at Warning level with rate limiting using key and the default 50ms window.
+func LogWRated(key string, format string, args ...interface{}) {
+	phlogger.LogWRated(key, format, args...)
 }
 
-// LogDRated logs at Debug level with rate limiting.
-func LogDRated(key string, window time.Duration, format string, args ...interface{}) {
-	phlogger.LogDRated(key, window, format, args...)
+// LogDRated logs at Debug level with rate limiting using key and the default 50ms window.
+func LogDRated(key string, format string, args ...interface{}) {
+	phlogger.LogDRated(key, format, args...)
+}
+
+// LogIRatedW logs at Info level with rate limiting using key and an explicit window.
+func LogIRatedW(key string, window time.Duration, format string, args ...interface{}) {
+	phlogger.LogIRatedW(key, window, format, args...)
+}
+
+// LogERatedW logs at Error level with rate limiting using key and an explicit window.
+func LogERatedW(key string, window time.Duration, format string, args ...interface{}) {
+	phlogger.LogERatedW(key, window, format, args...)
+}
+
+// LogWRatedW logs at Warning level with rate limiting using key and an explicit window.
+func LogWRatedW(key string, window time.Duration, format string, args ...interface{}) {
+	phlogger.LogWRatedW(key, window, format, args...)
+}
+
+// LogDRatedW logs at Debug level with rate limiting using key and an explicit window.
+func LogDRatedW(key string, window time.Duration, format string, args ...interface{}) {
+	phlogger.LogDRatedW(key, window, format, args...)
 }
 
 func InitializeLogger() {

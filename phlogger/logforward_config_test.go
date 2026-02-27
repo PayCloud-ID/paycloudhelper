@@ -17,8 +17,8 @@ func TestLogForwardConfigFromEnv_Defaults(t *testing.T) {
 	if !cfg.ForwardFatal {
 		t.Error("ForwardFatal should default to true")
 	}
-	if cfg.ForwardError {
-		t.Error("ForwardError should default to false")
+	if !cfg.ForwardError {
+		t.Error("ForwardError should default to true")
 	}
 	if cfg.ForwardWarn {
 		t.Error("ForwardWarn should default to false")

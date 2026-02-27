@@ -82,12 +82,23 @@ pch.LogJ(obj)                                // JSON (compact)
 pch.LogJI(obj)                               // JSON (indented)
 ```
 
-#### Rate-Limited Logging (opt-in)
+#### Default Rate Limiting
+
+All log functions (`LogI`, `LogE`, `LogW`, `LogD`, `LogF`) automatically rate-limit identical log lines using the **format string as key** with a **50ms default window**. Within 50ms, duplicate calls to the same format string are silently dropped; when the window expires the next emit appends `[+N suppressed]`.
+
+This cannot be disabled for plain `LogI/LogE` etc. — use `phlogger.Log.Infof()` directly if you need raw output.
+
+#### Rate-Limited Logging with Custom Key
 
 ```go
-// Log at most 1 message per key per 10 seconds
-pch.LogIRated("cache.miss", 10*time.Second, "[FuncName] cache miss key=%s", key)
-pch.LogERated("db.error", 5*time.Second, "[FuncName] db error: %v", err)
+// Custom key isolates the rate-limit bucket from the format string.
+// Uses the default 50ms window:
+pch.LogIRated("cache.miss", "[FuncName] cache miss key=%s", key)
+pch.LogERated("db.error", "[FuncName] db error: %v", err)
+
+// Explicit window override (when 50ms is too tight/loose):
+pch.LogIRatedW("cache.miss", 5*time.Second, "[FuncName] cache miss key=%s", key)
+pch.LogERatedW("db.error", 500*time.Millisecond, "[FuncName] db error: %v", err)
 ```
 
 #### Log Forwarding to Sentry
@@ -107,7 +118,7 @@ Environment variables (evaluated by `LogForwardConfigFromEnv()`):
 | Env Var | Default | Effect |
 |---------|---------|--------|
 | `LOG_FORWARD_FATAL` | `true` | Forward Fatal logs to Sentry |
-| `LOG_FORWARD_ERROR` | `false` | Forward Error logs to Sentry |
+| `LOG_FORWARD_ERROR` | `true` | Forward Error logs to Sentry |
 | `LOG_FORWARD_WARN` | `false` | Forward Warn logs to Sentry |
 | `LOG_FORWARD_INFO` | `false` | Forward Info logs to Sentry |
 
@@ -169,7 +180,7 @@ All configuration is loaded from environment variables in `InitializeApp()`:
 | `REDIS_PASSWORD` | No | `""` | Redis auth |
 | `SENTRY_DSN` | For Sentry | `""` | Sentry project DSN |
 | `LOG_FORWARD_FATAL` | No | `true` | Forward Fatal → Sentry |
-| `LOG_FORWARD_ERROR` | No | `false` | Forward Error → Sentry |
+| `LOG_FORWARD_ERROR` | No | `true` | Forward Error → Sentry |
 | `LOG_FORWARD_WARN` | No | `false` | Forward Warn → Sentry |
 | `LOG_FORWARD_INFO` | No | `false` | Forward Info → Sentry |
 | `TRANSACTION_REDIS_LOCK_TIMEOUT` | No | `2000` (ms) | Distributed lock TTL |

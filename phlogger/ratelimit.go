@@ -18,7 +18,11 @@ type rateLimiter struct {
 	entries sync.Map // key string → *rateLimitEntry
 }
 
-// globalRateLimiter is the singleton used by LogIRated / LogERated etc.
+// defaultWindow is the rate-limiting window applied by default to all log functions.
+// Duplicate log lines emitted within this window are suppressed automatically.
+const defaultWindow = 50 * time.Millisecond
+
+// globalRateLimiter is the singleton used by all log functions and LogIRated variants.
 var globalRateLimiter = newRateLimiter()
 
 func newRateLimiter() *rateLimiter {
