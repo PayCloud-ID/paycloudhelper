@@ -3,7 +3,7 @@
 **Go shared library** — common utilities for all PayCloud Hub microservices.
 
 Module: `bitbucket.org/paycloudid/paycloudhelper`  
-Go: 1.25
+Go: 1.24
 
 ---
 
