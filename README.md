@@ -13,6 +13,7 @@ Go: 1.24
 - [Package Structure](#package-structure)
 - [API Reference](#api-reference)
 - [Configuration](#configuration)
+- [Testing](#testing)
 - [Versioning](#versioning)
 - [Contributing](#contributing)
 
@@ -252,6 +253,53 @@ All configuration is loaded from environment variables in `InitializeApp()`:
 | `LOG_FORWARD_INFO` | No | `false` | Forward Info → Sentry |
 | `TRANSACTION_REDIS_LOCK_TIMEOUT` | No | `2000` (ms) | Distributed lock TTL |
 | `TRANSACTION_REDIS_BACKOFF` | No | `10` (ms) | Lock retry backoff |
+
+---
+
+## Testing
+
+Unit tests cover helpers, headers, configuration, response handling, Redis options/mutex/LockError, init/app env, validator rules, and subpackages (`phhelper`, `phjson`, `phlogger`, `phsentry`). Integration tests for Redis and middleware are skipped by default (require Redis/Echo).
+
+### Run all tests (from repo root)
+
+```bash
+./scripts/run_tests.sh
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-v`, `--verbose` | Verbose test output |
+| `-race` | Run with race detector (required for concurrency-related changes) |
+| `-cover` | Print coverage per package |
+| `-coverprofile` | Write `coverage.out` and print `go tool cover -func` summary |
+| `-short` | Skip long-running tests |
+| `-h`, `--help` | Show usage |
+
+**Examples:**
+
+```bash
+./scripts/run_tests.sh -v
+./scripts/run_tests.sh -race
+./scripts/run_tests.sh -coverprofile
+go tool cover -html=coverage.out   # open HTML report (after -coverprofile)
+```
+
+**Without the script:**
+
+```bash
+go test ./...
+go test ./... -race
+go test ./... -cover
+go test ./... -coverprofile=coverage.out -covermode=atomic
+```
+
+### Code quality
+
+- **Lint:** `go vet ./...`
+- **Build:** `go build ./...`
+- Tests follow Go testing conventions, table-driven where appropriate, with clear names and edge-case coverage. Integration-heavy code (AMQP, audit trail, health checks, Echo middleware) is covered by integration tests when Redis/services are available.
 
 ---
 
