@@ -94,6 +94,12 @@ go test ./...        # happy path + errors
 go test -race ./...  # for init / concurrency changes
 ```
 
+### 6. Update README and CHANGELOG When Changes Occur
+
+- **README.md** — Update whenever you add or change user-facing behavior, APIs, configuration, or workflows (e.g. new script, new env var, new section).
+- **CHANGELOG.md** — Update on every release-worthy change. Add entries under `[Unreleased]` in the appropriate category: **Added**, **Changed**, **Fixed**, **Deprecated**, **Removed**, **Security**. When cutting a release, move `[Unreleased]` content into a new version heading and add a link at the bottom.
+- If you only fix a typo or internal refactor with no user impact, a CHANGELOG line is optional; README only if it affects documented behavior.
+
 ## Key APIs at a Glance
 
 ### Logging
@@ -139,11 +145,28 @@ e.Use(RevokeToken)      // Validates JWT + revocation check in Redis
 
 ## Versioning
 
-| Bump | When |
-|------|------|
-| **PATCH** | Bug fixes, zero behavior change |
-| **MINOR** | New backward-compatible features |
-| **MAJOR** | Breaking changes (requires updating all consumers) |
+| Bump | When | Examples |
+|------|------|---------|
+| **PATCH** | Bug fix, zero behavior change, no new public API | Fix nil panic, fix typo in log message |
+| **MINOR** | New backward-compatible additions (new functions, new optional config) | `ConfigureLogForwarding()`, `LogIRated()` |
+| **MAJOR** | Any breaking change to existing public API signatures OR removal of exported symbols | Rename `InitSentry` params, remove `LogErr` |
+
+### Breaking Change Decision Tree
+
+```
+Does the change touch an EXISTING exported function signature?
+├─ YES → MAJOR bump required. Coordinate consumer updates first.
+└─ NO  → Does it add new exported symbols?
+          ├─ YES → MINOR bump (v1.X.0)
+          └─ NO  → PATCH bump (v1.6.X)
+```
+
+### Backward-Compatibility Contract
+
+- NEVER change existing exported function signatures
+- NEVER remove exported symbols without a deprecation cycle (MINOR → MAJOR)
+- New optional parameters → use variadic `opts ...Option` pattern
+- Deprecated functions retain original signature + route to new implementation
 
 **Known retractions:** v1.6.3 (verbose Redis logs), v1.6.0 (audit trail race), v1.5.2 (nil panic on init)
 
@@ -162,6 +185,7 @@ e.Use(RevokeToken)      // Validates JWT + revocation check in Redis
 | Project Context | `.agents/rules/project-context.md` | Architecture, package structure, 5 critical rules |
 | API Compatibility | `.agents/rules/api-compatibility.md` | Versioning contract, breaking change detection, deprecation |
 | Testing & Validation | `.agents/rules/testing-validation.md` | Test commands, patterns, coverage requirements |
+| Documentation & Changelog | `.agents/rules/documentation-changelog.md` | When and how to update README and CHANGELOG |
 
 ## Developer Workflows
 

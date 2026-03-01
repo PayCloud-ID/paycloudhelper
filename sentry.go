@@ -1,6 +1,9 @@
 package paycloudhelper
 
 import (
+	"context"
+	"time"
+
 	"bitbucket.org/paycloudid/paycloudhelper/phsentry"
 	"github.com/getsentry/sentry-go"
 )
@@ -67,4 +70,21 @@ func SendSentryMessage(msg string, args ...string) {
 
 func SendSentryEvent(event *sentry.Event, args ...string) {
 	phsentry.SendSentryEvent(event, args...)
+}
+
+// FlushSentry waits up to timeout for buffered Sentry events to drain.
+// Call before process shutdown to avoid losing queued errors.
+func FlushSentry(timeout time.Duration) {
+	phsentry.FlushSentry(timeout)
+}
+
+// SentryEnabled returns true if Sentry has been initialized.
+func SentryEnabled() bool {
+	return phsentry.SentryEnabled()
+}
+
+// SendSentryErrorWithContext captures an error with request context (e.g. from Echo).
+// Extra string args are passed through to phsentry for breadcrumb metadata.
+func SendSentryErrorWithContext(ctx context.Context, err error, args ...string) {
+	phsentry.SendSentryErrorWithContext(ctx, err, args...)
 }

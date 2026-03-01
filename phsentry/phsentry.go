@@ -1,10 +1,13 @@
 package phsentry
 
 import (
+	"context"
+	"time"
+
+	"bitbucket.org/paycloudid/paycloudhelper/phhelper"
 	"bitbucket.org/paycloudid/paycloudhelper/phlogger"
 	"dario.cat/mergo"
 	"github.com/getsentry/sentry-go"
-	"os"
 )
 
 var (
@@ -107,8 +110,8 @@ func InitSentry(options SentryOptions) *sentry.Client {
 
 		//setup sentry breadcrumb data
 		sd := &SentryData{
-			Service:  os.Getenv("APP_NAME"),
-			Module:   os.Getenv("APP_ENV"),
+			Service:  phhelper.GetAppName(),
+			Module:   phhelper.GetAppEnv(),
 			Function: "paycloud-be-func",
 		}
 		if options.Data != nil {
@@ -280,28 +283,23 @@ func sendToSentry(msg interface{}, msgType string, args ...string) {
 		if v, ok := msg.(string); ok && v != "" {
 			SendToSentryMessage(v, service, module, function)
 		}
-		break
 	case "debug":
 		if v, ok := msg.(error); ok && v != nil {
 			SendToSentryDebug(v, service, module, function)
 		}
-		break
 	case "warning":
 		if v, ok := msg.(error); ok && v != nil {
 			SendToSentryWarning(v, service, module, function)
 		}
-		break
 	case "event":
 		if v, ok := msg.(*sentry.Event); ok && v != nil {
 			SendToSentryEvent(v, service, module, function)
 		}
-		break
 	case "error":
 	default:
 		if v, ok := msg.(error); ok && v != nil {
 			SendToSentryError(v, service, module, function)
 		}
-		break
 	}
 }
 
@@ -338,4 +336,81 @@ func SendSentryEvent(event *sentry.Event, args ...string) {
 		return
 	}
 	sendToSentry(event, "event", args...)
+}
+
+// ReceiveLog forwards a log event to Sentry based on the level.
+// This is called by log hook subscribers — do not call directly.
+// level: "debug" | "info" | "warn" | "error" | "fatal"
+// message: formatted log string
+func ReceiveLog(level, message string) {
+	if sentryClient == nil {
+		return
+	}
+	hub := sentry.NewHub(sentryClient, sentry.NewScope())
+	hub.WithScope(func(scope *sentry.Scope) {
+		scope.SetLevel(sentryLevelFor(level))
+		addDefaultBreadcrumb(scope, level, message)
+		hub.CaptureMessage(message)
+	})
+}
+
+// FlushSentry waits for buffered Sentry events to be sent, up to timeout.
+// Call this before process exit (e.g. in shutdown handler) to avoid losing events.
+func FlushSentry(timeout time.Duration) {
+	if sentryClient == nil {
+		return
+	}
+	sentryClient.Flush(timeout)
+}
+
+// SentryEnabled returns true if a Sentry client has been initialized.
+// Use this to guard expensive error construction before calling SendSentryError.
+func SentryEnabled() bool {
+	return sentryClient != nil
+}
+
+// sentryLevelFor maps log level strings to sentry.Level.
+func sentryLevelFor(level string) sentry.Level {
+	switch level {
+	case "fatal":
+		return sentry.LevelFatal
+	case "error":
+		return sentry.LevelError
+	case "warn":
+		return sentry.LevelWarning
+	case "info":
+		return sentry.LevelInfo
+	default:
+		return sentry.LevelDebug
+	}
+}
+
+// addDefaultBreadcrumb adds service context to a Sentry scope.
+func addDefaultBreadcrumb(scope *sentry.Scope, level, message string) {
+	if sentryBreadcrumbData == nil {
+		return
+	}
+	scope.AddBreadcrumb(&sentry.Breadcrumb{
+		Type:     "default",
+		Category: level,
+		Message:  message,
+		Data:     GetSentryDataMap(),
+	}, 10)
+}
+
+// SendSentryErrorWithContext sends an error to Sentry with request context.
+// ctx may carry a Sentry Hub (set by middleware); falls back to global client.
+func SendSentryErrorWithContext(ctx context.Context, err error, args ...string) {
+	if err == nil || sentryClient == nil {
+		return
+	}
+	hub := sentry.GetHubFromContext(ctx)
+	if hub == nil {
+		hub = sentry.NewHub(sentryClient, sentry.NewScope())
+	}
+	hub.WithScope(func(scope *sentry.Scope) {
+		scope.SetLevel(sentry.LevelError)
+		addDefaultBreadcrumb(scope, "error", err.Error())
+		hub.CaptureException(err)
+	})
 }
