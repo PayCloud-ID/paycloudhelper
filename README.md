@@ -14,6 +14,8 @@ Go: 1.24
 - [API Reference](#api-reference)
 - [Configuration](#configuration)
 - [Testing](#testing)
+- [Verifying the library](#verifying-the-library)
+- [CI (Bitbucket Pipelines)](#ci-bitbucket-pipelines)
 - [Versioning](#versioning)
 - [Contributing](#contributing)
 
@@ -300,6 +302,56 @@ go test ./... -coverprofile=coverage.out -covermode=atomic
 - **Lint:** `go vet ./...`
 - **Build:** `go build ./...`
 - Tests follow Go testing conventions, table-driven where appropriate, with clear names and edge-case coverage. Integration-heavy code (AMQP, audit trail, health checks, Echo middleware) is covered by integration tests when Redis/services are available.
+
+---
+
+## Verifying the library
+
+To confirm the library is working correctly and all tested behaviour passes:
+
+1. **Build** — compiles without errors:
+   ```bash
+   go build ./...
+   ```
+2. **Vet** — no suspicious constructs:
+   ```bash
+   go vet ./...
+   ```
+3. **Tests** — all unit tests pass:
+   ```bash
+   go test ./...
+   ```
+4. **Race detector** (recommended for concurrency-related changes):
+   ```bash
+   go test -race ./...
+   ```
+
+One-liner from repo root:
+
+```bash
+go build ./... && go vet ./... && go test ./...
+```
+
+Or use the script: `./scripts/run_tests.sh` (add `-race` for race detection).
+
+---
+
+## CI (Bitbucket Pipelines)
+
+Every push to **develop** and **main** runs a pipeline that:
+
+- Builds the module (`go build ./...`)
+- Runs the linter (`go vet ./...`)
+- Runs all unit tests (`go test ./...`)
+
+If any step fails, the pipeline fails. Fix the code and push again.
+
+**Note:** Pipelines run *after* the push. The push itself is not blocked. To keep **main** (or **develop**) from accepting broken code:
+
+1. In Bitbucket: **Repository settings → Branch restrictions**.
+2. Add a restriction for `main` (and optionally `develop`): **Require passing pipelines** (and/or require pull requests). Then merges to that branch only succeed when the pipeline is green.
+
+Pipeline config: `bitbucket-pipelines.yml` in the repo root.
 
 ---
 
