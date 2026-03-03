@@ -62,16 +62,33 @@ if appName := os.Getenv("APP_NAME"); appName != "" { ... }
 // ❌ Never in middleware or helper files
 ```
 
-### 3. Logging via Library Helpers Only
+### 3. Logging via Library Helpers Only (pchelper/phlogger)
+
+Consumers must use the **root package** with alias `pchelper`; only other paycloudhelper subpackages may import `phlogger` directly.
+
+- **Format:** Every log line MUST include the calling function in square brackets: `[Type.MethodName]` for methods, `[FuncName]` for plain functions.
+- **Style:** Prefer key=value pairs after the function name.
+- **Levels:** Use the standard decision tree — failure/unexpected → `LogE`; degraded/recoverable → `LogW`; tracing → `LogD`; normal operations → `LogI`; unrecoverable → `LogF`.
 
 ```go
-// ✅ Structured logging with function context
-LogI("[FunctionName] operation: %s", value)
-LogE("[FunctionName] error: %v", err)
+// ✅ Root package alias in consumer services
+import pchelper "bitbucket.org/paycloudid/paycloudhelper"
 
-// ❌ Never
+// ✅ Methods: [ReceiverType.MethodName]
+pchelper.LogI("[Server.initializeConnections] gRPC connected host=%s", host)
+pchelper.LogE("[MerchantController.GetMerchant] gRPC error code=%s err=%v", code, err)
+
+// ✅ Plain functions: [FuncName]
+pchelper.LogI("[InitRedis] connected port=%s", port)
+
+// ✅ Error shorthand
+pchelper.LogErr(err)
+
+// ❌ Never in consumer code
+import "bitbucket.org/paycloudid/paycloudhelper/phlogger"
 log.Println("message")
 fmt.Println("debug")
+pchelper.LogE("error=%v", err)  // missing [Type.FuncName] prefix
 ```
 
 ### 4. Sync.Once for Singleton Init
@@ -102,16 +119,19 @@ go test -race ./...  # for init / concurrency changes
 
 ## Key APIs at a Glance
 
-### Logging
+### Logging (phlogger via root package)
 
-```go
-LogI("info %s", val)    // Info
-LogE("err %v", err)     // Error
-LogW("warn %s", msg)    // Warning
-LogD("debug %s", data)  // Debug
-LogJ(obj)               // JSON compact
-LogJI(obj)              // JSON indented
-```
+| Function | Level | Use |
+|----------|-------|-----|
+| `LogI(format, args...)` | Info | Normal operations, startup, state changes |
+| `LogE(format, args...)` | Error | Failures — gRPC/DB/validation errors |
+| `LogW(format, args...)` | Warn | Degraded but recoverable — retries, fallbacks |
+| `LogD(format, args...)` | Debug | Verbose tracing (silent at default info level) |
+| `LogF(format, args...)` | Fatal | Unrecoverable — process exits after hooks |
+| `LogJ(obj)` / `LogJI(obj)` | Info | Compact / indented JSON |
+| `LogErr(err)` | Error | Error value only (no format string) |
+
+Rated (unstable format key): `LogIRated("key", format, args...)`, `LogIRatedW("key", window, format, args...)`. Request-scoped: `NewLogContext("k", "v").LogI(format, args...)`. **Every format must start with `[Type.FuncName]` or `[FuncName]` and prefer key=value.** For the full PayCloud logging standard (sampling, Sentry forwarding, metrics, anti-patterns, code-generation rules), see the pchelper-logging-standard instructions.
 
 ### Response (`response.go`)
 

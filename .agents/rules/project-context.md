@@ -58,17 +58,22 @@ if appName := os.Getenv("APP_NAME"); appName != "" { ... }
 // Middleware must receive values via function parameters
 ```
 
-### 3. All Logging via Library Helpers
+### 3. All Logging via Library Helpers (pchelper/phlogger)
+
+Consumer services use the root package with alias `pchelper`; only other paycloudhelper subpackages may import `phlogger` directly. Every log line MUST include the caller in brackets: `[Type.MethodName]` for methods, `[FuncName]` for plain functions. Prefer key=value after the prefix.
 
 ```go
-// ✅ Use library log helpers
-LogI("[FunctionName] operation: %s", value)
-LogE("[FunctionName] error: %v", err)
-LogW("[FunctionName] warning: %s", detail)
+// ✅ Methods: [ReceiverType.MethodName]
+LogI("[Server.initializeConnections] gRPC connected host=%s", host)
+LogE("[MerchantController.GetMerchant] gRPC error code=%s err=%v", code, err)
 
-// ❌ Never use stdlib logging
+// ✅ Plain functions: [FuncName]
+LogI("[InitRedis] connected port=%s", port)
+
+// ❌ Never in consumers: direct phlogger import, stdlib log/fmt, or missing [Type.FuncName]
+import "bitbucket.org/paycloudid/paycloudhelper/phlogger"
 log.Println("message")
-fmt.Println("debug")
+LogE("error=%v", err)
 ```
 
 ### 4. Sync.Once for Init — Never Raw Nil Checks
@@ -96,7 +101,7 @@ go test ./...   # Must pass before every commit
 |------|---------|
 | `init.go` | Auto-init entry point |
 | `redis.go` | Redis pool, distributed locks, store/get helpers |
-| `logger.go` | Log shorthand aliases (`LogI`, `LogE`, `LogD`, `LogW`) |
+| `logger.go` | Root re-exports of phlogger: `LogI/E/W/D/F`, `LogErr`, `LogJ/LogJI`, `LogIRated`/`LogIRatedW`, `NewLogContext`, sampler/Sentry/metrics |
 | `response.go` | `ResponseApi` struct with HTTP helper methods |
 | `csrf.go` | `VerifCsrf` Echo middleware |
 | `idempotency-key.go` | `VerifIdemKey` Echo middleware |

@@ -75,14 +75,17 @@ pch.ConfigureLogForwarding(pch.LogForwardConfig{
 
 ### Logging
 
+Import the root package (e.g. `import pch "bitbucket.org/paycloudid/paycloudhelper"`). **Do not import `phlogger` directly in consumer services.** Every log line must include the caller in square brackets: use `[Type.MethodName]` for methods (e.g. `[Server.Start]`) and `[FuncName]` for plain functions. Prefer key=value style after the prefix.
+
 ```go
-pch.LogI("[FuncName] started id=%s", id)    // Info
+pch.LogI("[FuncName] started id=%s", id)    // Info — or [Server.Start] for methods
 pch.LogE("[FuncName] error: %v", err)        // Error
 pch.LogW("[FuncName] warn: %s", msg)         // Warning
 pch.LogD("[FuncName] debug key=%s", key)     // Debug (off in production)
 pch.LogF("[FuncName] fatal: %v", err)        // Fatal — process exits
 pch.LogJ(obj)                                // JSON (compact)
 pch.LogJI(obj)                               // JSON (indented)
+pch.LogErr(err)                              // Error shorthand (no format string)
 ```
 
 #### Sampled Logging (Default Behavior)
