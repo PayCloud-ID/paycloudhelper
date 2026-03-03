@@ -42,7 +42,7 @@ func (r *rMqAutoConnect) connect(uri string) (c *amqp.Connection, err error) {
 		maxTrialMinute = 7 // 10 minute
 	)
 	// connect to rabbit mq
-	LogI("rmqAuto.connect() try connecting to rabbit mq ...")
+	LogI("%s try connecting to rabbitmq", buildLogPrefix("RMqAutoConnect.connect"))
 	trial := 0
 	for {
 		trial++
@@ -53,33 +53,33 @@ func (r *rMqAutoConnect) connect(uri string) (c *amqp.Connection, err error) {
 		}
 		r.conn, err = amqp.DialConfig(uri, cfg)
 		if err != nil {
-			LogE("rmqAuto.connect() err_message=%s", err.Error())
+			LogE("%s connection failed err=%s", buildLogPrefix("RMqAutoConnect.connect"), err.Error())
 			switch {
 			case trial <= maxTrialSecond:
-				LogI("rmqAuto.connect() try to reconnect in 30 seconds ...")
+				LogI("%s reconnect delay=30s", buildLogPrefix("RMqAutoConnect.connect"))
 				<-time.After(time.Duration(30) * time.Second)
 			case trial <= maxTrialMinute:
-				LogI("rmqAuto.connect() try to reconnect in 10 minutes ...")
+				LogI("%s reconnect delay=10m", buildLogPrefix("RMqAutoConnect.connect"))
 				<-time.After(time.Duration(10) * time.Minute)
 			default:
-				LogI("rmqAuto.connect() try to reconnect in 1 hour ...")
+				LogI("%s reconnect delay=1h", buildLogPrefix("RMqAutoConnect.connect"))
 				<-time.After(time.Duration(1) * time.Hour)
 			}
 			continue
 		}
 		break
 	}
-	LogI("rmqAuto.connect() connected to rabbit mq successfully")
+	LogI("%s connected to rabbitmq successfully", buildLogPrefix("RMqAutoConnect.connect"))
 	// keep a live
 	r.conn.Config.Heartbeat = time.Duration(5) * time.Second
 	//declare channel
-	LogI("rmqAuto.connect() open channel ...")
+	LogI("%s opening channel", buildLogPrefix("RMqAutoConnect.connect"))
 	r.ch, err = r.conn.Channel()
 	if err != nil {
 		r.conn.Close()
-		LogF("rmqAuto.connect() Channel err_message=%s", err.Error())
+		LogF("%s channel open failed err=%s", buildLogPrefix("RMqAutoConnect.connect"), err.Error())
 	}
-	LogI("rmqAuto.connect() opening channel succeed")
+	LogI("%s channel opened successfully", buildLogPrefix("RMqAutoConnect.connect"))
 	return r.conn, nil
 }
 
@@ -87,7 +87,7 @@ func (r *rMqAutoConnect) DeclareQueues(queues ...string) (err error) {
 	r.declaredQueues = queues
 	//declare queues
 	for _, queue := range queues {
-		LogI("rmqAuto.DeclareQueues() declare queue=%s", queue)
+		LogI("%s declare queue=%s", buildLogPrefix("RMqAutoConnect.DeclareQueues"), queue)
 		_, err = r.ch.QueueDeclare(
 			queue, //name
 			//true,  //durable
@@ -100,10 +100,10 @@ func (r *rMqAutoConnect) DeclareQueues(queues ...string) (err error) {
 			}(), //args
 		)
 		if err != nil {
-			LogE("rmqAuto.DeclareQueues() QueueDeclare err_message=%s", err.Error())
+			LogE("%s queue declare failed err=%s", buildLogPrefix("RMqAutoConnect.DeclareQueues"), err.Error())
 			return
 		}
-		LogI("rmqAuto.DeclareQueues() queue is successfully declared=%s", queue)
+		LogI("%s queue declared=%s", buildLogPrefix("RMqAutoConnect.DeclareQueues"), queue)
 	}
 	return
 }
@@ -111,7 +111,7 @@ func (r *rMqAutoConnect) DeclareQueues(queues ...string) (err error) {
 func (r *rMqAutoConnect) stop() {
 	defer func() {
 		if it := recover(); it != nil {
-			LogI("rmqAuto.stop() panic=%v", it)
+			LogI("%s panic recovered=%v", buildLogPrefix("RMqAutoConnect.stop"), it)
 		}
 	}()
 	if r.stopReconnect != nil {
@@ -135,7 +135,7 @@ func (r *rMqAutoConnect) afterReconnect() { // implement template pattern
 func (r *rMqAutoConnect) startConnection(username, password, host, port, vhost string) (err error) {
 	// set uri parameter to connect to rabbit mq
 	connection := fmt.Sprintf("amqp://%s:%s@%s:%s/%s", username, password, host, port, vhost)
-	LogI("rmqAuto.startConnection() connection=%s", connection)
+	LogI("%s connection=%s", buildLogPrefix("RMqAutoConnect.startConnection"), connection)
 	r.uriConnection = connection
 	r.conn, err = r.connect(r.uriConnection)
 	if err != nil {
@@ -152,21 +152,21 @@ func (r *rMqAutoConnect) getConnection() *amqp.Connection {
 }
 
 func (r *rMqAutoConnect) reconnect() {
-	LogI("rmqAuto.reconnect() auto reconnect")
+	LogI("%s auto reconnect started", buildLogPrefix("RMqAutoConnect.reconnect"))
 	r.ctxReconnect, r.stopReconnect = context.WithCancel(context.Background()) // prepare context
-	LogI("rmqAuto.reconnect() create notif close channel")
+	LogI("%s creating notify-close channel", buildLogPrefix("RMqAutoConnect.reconnect"))
 	r.notifCloseCh = make(chan *amqp.Error)
-	LogI("rmqAuto.reconnect() notif close channel is created successfully")
+	LogI("%s notify-close channel created", buildLogPrefix("RMqAutoConnect.reconnect"))
 	go func() {
 		for {
-			LogI("rmqAuto.reconnect() check if rabbit mq connection is closed ...")
+			LogI("%s waiting for connection close signal", buildLogPrefix("RMqAutoConnect.reconnect"))
 			select {
 			case <-r.ctxReconnect.Done():
-				LogI("rmqAuto.reconnect() stop reconnect listening queue ...")
+				LogI("%s stop reconnect listener", buildLogPrefix("RMqAutoConnect.reconnect"))
 				return
 			case <-r.getConnection().NotifyClose(r.notifCloseCh):
 				r.beforeReconnect()
-				LogI("rmqAuto.reconnect() connection is closed, try to reconnect to rabbit mq ...")
+				LogI("%s connection closed, reconnecting", buildLogPrefix("RMqAutoConnect.reconnect"))
 				r.reset()
 				r.connect(r.uriConnection)
 				r.DeclareQueues(r.declaredQueues...)

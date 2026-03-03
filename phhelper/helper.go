@@ -5,7 +5,26 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 )
+
+const LogModulePrefix = "pchelper"
+
+// BuildLogPrefix builds a standardized log prefix.
+// If LogModulePrefix is not empty => [<LogModulePrefix>.<functionName>]
+// If LogModulePrefix is empty => [<functionName>]
+func BuildLogPrefix(functionName string) string {
+	fn := strings.TrimSpace(functionName)
+	if fn == "" {
+		fn = "Log"
+	}
+
+	if LogModulePrefix != "" {
+		return fmt.Sprintf("[%s.%s]", LogModulePrefix, fn)
+	}
+
+	return fmt.Sprintf("[%s]", fn)
+}
 
 func JsonMinify(jsonB []byte) ([]byte, error) {
 	var buff *bytes.Buffer = new(bytes.Buffer)

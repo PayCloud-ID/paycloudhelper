@@ -21,7 +21,7 @@ func SetUpRabbitMq(host, port, vhost, username, password, auditTrailQue, appName
 		phhelper.SetAppName(appName)
 	}
 
-	LogI("[AMQP] Init audit trail rabbitmq url=%s queue=%s", urlStr, auditTrailQue)
+	LogI("%s init audittrail rabbitmq url=%s queue=%s", buildLogPrefix("SetUpRabbitMq"), urlStr, auditTrailQue)
 	auditTrailMqClient = NewAmqpClient(auditTrailQue, "audittrail-"+GetAppName(), uriConnection, nil)
 
 	return auditTrailMqClient
@@ -33,7 +33,7 @@ func LogAudittrailProcess(funcName, desc, info string, key *[]string) {
 		return
 	}
 
-	LogI("[AMQP] LogAuditTrailProcess func=%s desc=%s info=%s", funcName, desc, info)
+	LogI("%s func=%s desc=%s info=%s", buildLogPrefix("LogAudittrailProcess"), funcName, desc, info)
 
 	go func() {
 		dataAudittrail := AuditTrailProcess{
@@ -67,7 +67,7 @@ func LogAudittrailData(funcName, desc, source, commType string, key *[]string, d
 		return
 	}
 
-	LogI("[AMQP] LogAuditTrailData func=%s desc=%s source=%s type=%s", funcName, desc, source, commType)
+	LogI("%s func=%s desc=%s source=%s type=%s", buildLogPrefix("LogAudittrailData"), funcName, desc, source, commType)
 
 	go func() {
 		//set data audit trail
@@ -109,8 +109,8 @@ func logAuditErrorWithSentry(msg string, err error) {
 // pushMessageAudit push message to audit trail queue
 func pushMessageAudit(data interface{}) {
 	if auditTrailMqClient == nil || auditTrailMqClient.queueName == "" {
-		err := fmt.Errorf("[AMQP] client/queue does not exists")
-		logAuditErrorWithSentry("[AMQP] ERR client/queue does not exists", err)
+		err := fmt.Errorf("%s client/queue does not exist", buildLogPrefix("pushMessageAudit"))
+		logAuditErrorWithSentry(fmt.Sprintf("%s client/queue does not exist", buildLogPrefix("pushMessageAudit")), err)
 		return
 	}
 
@@ -118,18 +118,18 @@ func pushMessageAudit(data interface{}) {
 
 	msgBytes, err := jsonMarshalNoEsc(data)
 	if err != nil {
-		logAuditErrorWithSentry(fmt.Sprintf("[AMQP] ERR convert data to byte. err=%v", err), err)
+		logAuditErrorWithSentry(fmt.Sprintf("%s convert data to bytes failed err=%v", buildLogPrefix("pushMessageAudit"), err), err)
 		return
 	}
 
 	err = auditTrailMqClient.Push(msgBytes)
 	if err != nil {
 		logAuditErrorWithSentry(
-			fmt.Sprintf("[AMQP] ERR publish message to queue queue=%s err=%v", auditTrailQueueName, err),
+			fmt.Sprintf("%s publish message failed queue=%s err=%v", buildLogPrefix("pushMessageAudit"), auditTrailQueueName, err),
 			err,
 		)
 		return
 	}
 
-	LogI("[AMQP] Publish message async to queue successfully queue=%s conn=%s", auditTrailQueueName, auditTrailMqClient.connName)
+	LogI("%s publish message async success queue=%s conn=%s", buildLogPrefix("pushMessageAudit"), auditTrailQueueName, auditTrailMqClient.connName)
 }

@@ -101,17 +101,17 @@ func ValidateConfiguration() []ConfigError {
 func LogConfigurationWarnings() {
 	errors := ValidateConfiguration()
 	if len(errors) == 0 {
-		LogI("Configuration validation: All checks passed ✓")
+		LogI("%s configuration validation passed", buildLogPrefix("LogConfigurationWarnings"))
 		return
 	}
 
-	LogW("Configuration validation found %d issue(s):", len(errors))
+	LogW("%s configuration validation found issues count=%d", buildLogPrefix("LogConfigurationWarnings"), len(errors))
 	for _, err := range errors {
 		switch err.Level {
 		case "error":
-			LogE("  [ERROR] %s: %s", err.Field, err.Message)
+			LogE("%s error field=%s message=%s", buildLogPrefix("LogConfigurationWarnings"), err.Field, err.Message)
 		case "warning":
-			LogW("  [WARN]  %s: %s", err.Field, err.Message)
+			LogW("%s warning field=%s message=%s", buildLogPrefix("LogConfigurationWarnings"), err.Field, err.Message)
 		}
 	}
 }

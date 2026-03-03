@@ -79,14 +79,14 @@ func checkRedisHealth() HealthStatus {
 	if err != nil {
 		status.Status = "unhealthy"
 		status.Message = err.Error()
-		LogE("Health check: Redis unhealthy - %v", err)
+		LogE("%s redis unhealthy err=%v", buildLogPrefix("checkRedisHealth"), err)
 	} else if latency > 1000 {
 		status.Status = "degraded"
 		status.Message = "high latency detected"
-		LogW("Health check: Redis degraded - latency %dms", latency)
+		LogW("%s redis degraded latency_ms=%d", buildLogPrefix("checkRedisHealth"), latency)
 	} else {
 		status.Status = "healthy"
-		LogD("Health check: Redis healthy - latency %dms", latency)
+		LogD("%s redis healthy latency_ms=%d", buildLogPrefix("checkRedisHealth"), latency)
 	}
 
 	status.Latency = latency
@@ -100,7 +100,7 @@ func checkRabbitMQHealth() HealthStatus {
 	if auditTrailMqClient == nil {
 		status.Status = "unhealthy"
 		status.Message = "rabbitmq client not initialized"
-		LogD("Health check: RabbitMQ not initialized (optional component)")
+		LogD("%s rabbitmq not initialized", buildLogPrefix("checkRabbitMQHealth"))
 		return status
 	}
 
@@ -112,12 +112,12 @@ func checkRabbitMQHealth() HealthStatus {
 	if !isReady {
 		status.Status = "degraded"
 		status.Message = "connection not ready"
-		LogW("Health check: RabbitMQ degraded - connection not ready")
+		LogW("%s rabbitmq degraded connection_not_ready=true", buildLogPrefix("checkRabbitMQHealth"))
 		return status
 	}
 
 	status.Status = "healthy"
-	LogD("Health check: RabbitMQ healthy")
+	LogD("%s rabbitmq healthy", buildLogPrefix("checkRabbitMQHealth"))
 	return status
 }
 
@@ -128,12 +128,12 @@ func checkSentryHealth() HealthStatus {
 	if GetSentryClient() == nil {
 		status.Status = "unhealthy"
 		status.Message = "sentry client not initialized"
-		LogD("Health check: Sentry not initialized (optional component)")
+		LogD("%s sentry not initialized", buildLogPrefix("checkSentryHealth"))
 		return status
 	}
 
 	status.Status = "healthy"
-	LogD("Health check: Sentry healthy")
+	LogD("%s sentry healthy", buildLogPrefix("checkSentryHealth"))
 	return status
 }
 

@@ -2,6 +2,8 @@ package phsentry
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"bitbucket.org/paycloudid/paycloudhelper/phhelper"
@@ -14,6 +16,10 @@ var (
 	sentryBreadcrumbData *SentryData
 	sentryClient         *sentry.Client
 	sentryClientOptions  *sentry.ClientOptions
+)
+
+const (
+	defaultFunctionName = "paycloud-be-func"
 )
 
 type SentryData struct {
@@ -31,6 +37,109 @@ type SentryOptions struct {
 	Data        *SentryData
 }
 
+// sentryDiagnosticWriter bridges Sentry SDK internal debug logs to paycloudhelper log output.
+// It intentionally writes via phlogger.Log (golog) directly to avoid hook recursion.
+type sentryDiagnosticWriter struct{}
+
+func (w sentryDiagnosticWriter) Write(p []byte) (n int, err error) {
+	msg := normalizeSentryDiagnosticMessage(string(p))
+	if msg != "" {
+		phlogger.Log.Infof("%s", msg)
+	}
+	return len(p), nil
+}
+
+func normalizeSentryDiagnosticMessage(raw string) string {
+	msg := strings.TrimSpace(raw)
+	if msg == "" {
+		return ""
+	}
+
+	msg = strings.TrimPrefix(msg, "[Sentry] ")
+	msg = strings.TrimPrefix(msg, phhelper.BuildLogPrefix("Sentry")+" ")
+	parts := strings.SplitN(msg, " ", 3)
+	if len(parts) == 3 && isSentryDate(parts[0]) && isSentryTime(parts[1]) {
+		msg = parts[2]
+	}
+
+	return fmt.Sprintf("%s %s", phhelper.BuildLogPrefix("Sentry"), msg)
+}
+
+func functionLogPrefix(functionName string) string {
+	return phhelper.BuildLogPrefix(functionName)
+}
+
+func resolveSentryContext(args ...string) (service, module, function string) {
+	service = phhelper.GetAppName()
+	module = phhelper.GetAppEnv()
+	function = defaultFunctionName
+
+	if sentryBreadcrumbData != nil {
+		if sentryBreadcrumbData.Service != "" {
+			service = sentryBreadcrumbData.Service
+		}
+		if sentryBreadcrumbData.Module != "" {
+			module = sentryBreadcrumbData.Module
+		}
+		if sentryBreadcrumbData.Function != "" {
+			function = sentryBreadcrumbData.Function
+		}
+	}
+
+	if len(args) > 0 && args[0] != "" {
+		service = args[0]
+	}
+	if len(args) > 1 && args[1] != "" {
+		module = args[1]
+	}
+	if len(args) > 2 && args[2] != "" {
+		function = args[2]
+	}
+
+	return service, module, function
+}
+
+func logNoClient(functionName, service, eventType, detail string) {
+	phlogger.LogW("%s Sentry client not initialized service=%s type=%s detail=%s", functionLogPrefix(functionName), service, eventType, detail)
+}
+
+func captureWithBreadcrumb(
+	level sentry.Level,
+	breadcrumbType,
+	category,
+	breadcrumbMessage,
+	service,
+	module,
+	function string,
+	capture func(hub *sentry.Hub),
+) {
+	hub := sentry.NewHub(sentryClient, sentry.NewScope())
+	hub.WithScope(func(scope *sentry.Scope) {
+		scope.SetLevel(level)
+		scope.AddBreadcrumb(&sentry.Breadcrumb{
+			Type:     breadcrumbType,
+			Category: category,
+			Message:  breadcrumbMessage,
+			Data: map[string]interface{}{
+				"Service":  service,
+				"Module":   module,
+				"Function": function,
+			},
+		}, 5)
+		capture(hub)
+	})
+}
+
+func isSentryDate(s string) bool {
+	_, err := time.Parse("2006/01/02", s)
+	return err == nil
+}
+
+func isSentryTime(s string) bool {
+	_, err := time.Parse("15:04:05", s)
+	return err == nil
+}
+
 func NewSentryData(dt *SentryData) {
 	if dt == nil {
 		return
@@ -38,7 +147,7 @@ func NewSentryData(dt *SentryData) {
 	sentryBreadcrumbData = &SentryData{}
 	err := mergo.Merge(sentryBreadcrumbData, *dt)
 	if err != nil {
-		phlogger.LogE("[SENTRY] ERR initialized sentry data %s", err.Error())
+		phlogger.LogE("%s failed to initialize Sentry data err=%v", functionLogPrefix("NewSentryData"), err)
 		return
 	}
 }
@@ -79,19 +188,20 @@ func InitSentryOptions(options SentryOptions) {
 	sentryClientOptions = &sentry.ClientOptions{
 		AttachStacktrace: false,
 		TracesSampleRate: 1.0,
+		DebugWriter:      sentryDiagnosticWriter{},
 	}
 
 	//merge default options with input
 	err := mergo.Merge(sentryClientOptions, clOpts)
 	if err != nil {
-		phlogger.LogF("[SENTRY] ERR merge options. %s", err.Error())
+		phlogger.LogF("%s failed to merge Sentry options err=%v", functionLogPrefix("InitSentryOptions"), err)
 	}
 
 	//merge another custom options if exists
 	if options.Options != nil {
 		errAdd := mergo.Merge(sentryClientOptions, options.Options)
 		if errAdd != nil {
-			phlogger.LogE("[SENTRY] ERR merge additional options. %s", errAdd.Error())
+			phlogger.LogE("%s failed to merge additional Sentry options err=%v", functionLogPrefix("InitSentryOptions"), errAdd)
 		}
 	}
 }
@@ -104,7 +214,7 @@ func InitSentry(options SentryOptions) *sentry.Client {
 	InitSentryOptions(options)
 	client, err := sentry.NewClient(*sentryClientOptions)
 	if err != nil {
-		phlogger.LogF("sentry.Init: %s", err)
+		phlogger.LogF("%s failed to initialize Sentry client err=%v", functionLogPrefix("InitSentry"), err)
 	} else {
 		sentryClient = client
 
@@ -112,12 +222,12 @@ func InitSentry(options SentryOptions) *sentry.Client {
 		sd := &SentryData{
 			Service:  phhelper.GetAppName(),
 			Module:   phhelper.GetAppEnv(),
-			Function: "paycloud-be-func",
+			Function: defaultFunctionName,
 		}
 		if options.Data != nil {
 			errDt := mergo.Merge(sd, options.Data, mergo.WithOverride)
 			if errDt != nil {
-				phlogger.LogE("[SENTRY] ERR merge sentry data. %s", errDt.Error())
+				phlogger.LogE("%s failed to merge Sentry data err=%v", functionLogPrefix("InitSentry"), errDt)
 			}
 		}
 		NewSentryData(sd)
@@ -131,24 +241,21 @@ func SendToSentryMessage(message string, service, module, function string) {
 		return
 	}
 	if sentryClient == nil {
-		phlogger.LogW("[SENTRY] ERR_NO_CLIENT service: %s MSG: %s\n", service, message)
+		logNoClient("SendToSentryMessage", service, "message", message)
 		return
 	}
-	hub := sentry.NewHub(sentryClient, sentry.NewScope())
-	hub.WithScope(func(scope *sentry.Scope) {
-		scope.SetLevel(sentry.LevelInfo)
-		scope.AddBreadcrumb(&sentry.Breadcrumb{
-			Type:     "Info",
-			Category: "Information",
-			Message:  "Details of message stack",
-			Data: map[string]interface{}{
-				"Service":  service,
-				"Module":   module,
-				"Function": function,
-			},
-		}, 5)
-		hub.CaptureMessage(message)
-	})
+	captureWithBreadcrumb(
+		sentry.LevelInfo,
+		"Info",
+		"Information",
+		"Details of message stack",
+		service,
+		module,
+		function,
+		func(hub *sentry.Hub) {
+			hub.CaptureMessage(message)
+		},
+	)
 }
 
 func SendToSentryError(err error, service, module, function string) {
@@ -156,24 +263,21 @@ func SendToSentryError(err error, service, module, function string) {
 		return
 	}
 	if sentryClient == nil {
-		phlogger.LogW("[SENTRY] ERR_NO_CLIENT service: %s ERR: %s\n", service, err.Error())
+		logNoClient("SendToSentryError", service, "error", err.Error())
 		return
 	}
-	hub := sentry.NewHub(sentryClient, sentry.NewScope())
-	hub.WithScope(func(scope *sentry.Scope) {
-		scope.SetLevel(sentry.LevelError)
-		scope.AddBreadcrumb(&sentry.Breadcrumb{
-			Type:     "Error",
-			Category: "Information",
-			Message:  "Details of error stack",
-			Data: map[string]interface{}{
-				"Service":  service,
-				"Module":   module,
-				"Function": function,
-			},
-		}, 5)
-		hub.CaptureException(err)
-	})
+	captureWithBreadcrumb(
+		sentry.LevelError,
+		"Error",
+		"Information",
+		"Details of error stack",
+		service,
+		module,
+		function,
+		func(hub *sentry.Hub) {
+			hub.CaptureException(err)
+		},
+	)
 }
 
 func SendToSentryWarning(err error, service, module, function string) {
@@ -181,24 +285,21 @@ func SendToSentryWarning(err error, service, module, function string) {
 		return
 	}
 	if sentryClient == nil {
-		phlogger.LogW("[SENTRY] ERR_NO_CLIENT service: %s WARN: %s\n", service, err.Error())
+		logNoClient("SendToSentryWarning", service, "warning", err.Error())
 		return
 	}
-	hub := sentry.NewHub(sentryClient, sentry.NewScope())
-	hub.WithScope(func(scope *sentry.Scope) {
-		scope.SetLevel(sentry.LevelWarning)
-		scope.AddBreadcrumb(&sentry.Breadcrumb{
-			Type:     "Warning",
-			Category: "Information",
-			Message:  "Details of warning stack",
-			Data: map[string]interface{}{
-				"Service":  service,
-				"Module":   module,
-				"Function": function,
-			},
-		}, 5)
-		hub.CaptureException(err)
-	})
+	captureWithBreadcrumb(
+		sentry.LevelWarning,
+		"Warning",
+		"Information",
+		"Details of warning stack",
+		service,
+		module,
+		function,
+		func(hub *sentry.Hub) {
+			hub.CaptureException(err)
+		},
+	)
 }
 
 func SendToSentryDebug(err error, service, module, function string) {
@@ -206,24 +307,21 @@ func SendToSentryDebug(err error, service, module, function string) {
 		return
 	}
 	if sentryClient == nil {
-		phlogger.LogW("[SENTRY] ERR_NO_CLIENT service: %s DEBUG: %s\n", service, err.Error())
+		logNoClient("SendToSentryDebug", service, "debug", err.Error())
 		return
 	}
-	hub := sentry.NewHub(sentryClient, sentry.NewScope())
-	hub.WithScope(func(scope *sentry.Scope) {
-		scope.SetLevel(sentry.LevelDebug)
-		scope.AddBreadcrumb(&sentry.Breadcrumb{
-			Type:     "Debug",
-			Category: "Debug",
-			Message:  "Details of debug message stack",
-			Data: map[string]interface{}{
-				"Service":  service,
-				"Module":   module,
-				"Function": function,
-			},
-		}, 5)
-		hub.CaptureException(err)
-	})
+	captureWithBreadcrumb(
+		sentry.LevelDebug,
+		"Debug",
+		"Debug",
+		"Details of debug message stack",
+		service,
+		module,
+		function,
+		func(hub *sentry.Hub) {
+			hub.CaptureException(err)
+		},
+	)
 }
 
 func SendToSentryEvent(event *sentry.Event, service, module, function string) {
@@ -231,24 +329,21 @@ func SendToSentryEvent(event *sentry.Event, service, module, function string) {
 		return
 	}
 	if sentryClient == nil {
-		phlogger.LogW("[SENTRY] ERR_NO_CLIENT service: %s EVENT: %s\n", service, module)
+		logNoClient("SendToSentryEvent", service, "event", module)
 		return
 	}
-	hub := sentry.NewHub(sentryClient, sentry.NewScope())
-	hub.WithScope(func(scope *sentry.Scope) {
-		scope.SetLevel(sentry.LevelInfo)
-		scope.AddBreadcrumb(&sentry.Breadcrumb{
-			Type:     "Info",
-			Category: "Information",
-			Message:  "Details of event stack",
-			Data: map[string]interface{}{
-				"Service":  service,
-				"Module":   module,
-				"Function": function,
-			},
-		}, 5)
-		hub.CaptureEvent(event)
-	})
+	captureWithBreadcrumb(
+		sentry.LevelInfo,
+		"Info",
+		"Information",
+		"Details of event stack",
+		service,
+		module,
+		function,
+		func(hub *sentry.Hub) {
+			hub.CaptureEvent(event)
+		},
+	)
 }
 
 // args[0] service string
@@ -265,18 +360,7 @@ func sendToSentry(msg interface{}, msgType string, args ...string) {
 		return
 	}
 
-	service := sentryBreadcrumbData.Service
-	module := sentryBreadcrumbData.Module
-	function := sentryBreadcrumbData.Function
-	if len(args) > 0 && args[0] != "" {
-		service = args[0]
-	}
-	if len(args) > 1 && args[1] != "" {
-		module = args[1]
-	}
-	if len(args) > 2 && args[2] != "" {
-		function = args[2]
-	}
+	service, module, function := resolveSentryContext(args...)
 
 	switch msgType {
 	case "message":

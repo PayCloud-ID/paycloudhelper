@@ -16,7 +16,7 @@ func init() {
 
 func InitializeApp() {
 	if err := godotenv.Load(); err != nil {
-		LogI("PCHELPER ERR godotenv.Load err_message=%s", err)
+		LogI("%s failed to load .env err=%v", buildLogPrefix("InitializeApp"), err)
 	}
 
 	if appName := os.Getenv("APP_NAME"); appName != "" {

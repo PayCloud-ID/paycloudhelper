@@ -42,7 +42,7 @@ func VerifIdemKey(next echo.HandlerFunc) echo.HandlerFunc {
 		// validate header request
 		validate := header.ValiadateHeaderIdem()
 		if validate != nil {
-			LogE("[%s] VerifIdemKey: validation failed method=%s path=%s validation=%s",
+			LogE("%s [%s] validation failed method=%s path=%s validation=%s", buildLogPrefix("VerifIdemKey"),
 				requestID, requestMethod, requestPath, JSONEncode(validate))
 			response.BadRequest("invalid idempotency key format", "IDEM_INVALID_FORMAT")
 			return c.JSON(response.Code, response)
@@ -55,7 +55,7 @@ func VerifIdemKey(next echo.HandlerFunc) echo.HandlerFunc {
 
 		session, err := strconv.Atoi(header.Session)
 		if err != nil {
-			LogE("[%s] VerifIdemKey: invalid session header method=%s path=%s session=%s err=%v",
+			LogE("%s [%s] invalid session header method=%s path=%s session=%s err=%v", buildLogPrefix("VerifIdemKey"),
 				requestID, requestMethod, requestPath, header.Session, err)
 			response.BadRequest("invalid session header format", "IDEM_INVALID_SESSION")
 			return c.JSON(response.Code, response)
@@ -72,14 +72,14 @@ func VerifIdemKey(next echo.HandlerFunc) echo.HandlerFunc {
 			var status string
 			request, status, err = ReadBody(c, header.IdempotencyKey)
 			if err != nil {
-				LogE("[%s] VerifIdemKey: failed to read body method=%s path=%s key=%s err=%v",
+				LogE("%s [%s] failed to read body method=%s path=%s key=%s err=%v", buildLogPrefix("VerifIdemKey"),
 					requestID, requestMethod, requestPath, header.IdempotencyKey, err)
 				response.InternalServerError(err)
 				return c.JSON(response.Code, response)
 			}
 
 			if status != "" {
-				LogE("[%s] VerifIdemKey: MD5 validation failed method=%s path=%s key=%s status=%s",
+				LogE("%s [%s] MD5 validation failed method=%s path=%s key=%s status=%s", buildLogPrefix("VerifIdemKey"),
 					requestID, requestMethod, requestPath, header.IdempotencyKey, status)
 				response.BadRequest("idempotency key does not match request body", "IDEM_KEY_MISMATCH")
 				return c.JSON(response.Code, response)
@@ -91,11 +91,11 @@ func VerifIdemKey(next echo.HandlerFunc) echo.HandlerFunc {
 
 		// if key exist, return request data has been submitted and request stopped here
 		if data != "" {
-			LogI("[%s] VerifIdemKey: duplicate request detected method=%s path=%s key=%s",
+			LogI("%s [%s] duplicate request detected method=%s path=%s key=%s", buildLogPrefix("VerifIdemKey"),
 				requestID, requestMethod, requestPath, header.IdempotencyKey)
 			err = jsoniter.ConfigFastest.Unmarshal([]byte(data), &request)
 			if err != nil {
-				LogE("[%s] VerifIdemKey: failed to unmarshal cached data method=%s path=%s key=%s err=%v",
+				LogE("%s [%s] failed to unmarshal cached data method=%s path=%s key=%s err=%v", buildLogPrefix("VerifIdemKey"),
 					requestID, requestMethod, requestPath, header.IdempotencyKey, err)
 				response.InternalServerError(err)
 				return c.JSON(response.Code, response)
@@ -113,7 +113,7 @@ func VerifIdemKey(next echo.HandlerFunc) echo.HandlerFunc {
 				case nil:
 					err = StoreRedis(header.IdempotencyKey, header, time.Second*time.Duration(session))
 					if err != nil {
-						LogE("[%s] VerifIdemKey: failed to store header in redis method=%s path=%s key=%s err=%v",
+						LogE("%s [%s] failed to store header in redis method=%s path=%s key=%s err=%v", buildLogPrefix("VerifIdemKey"),
 							requestID, requestMethod, requestPath, header.IdempotencyKey, err)
 						response.InternalServerError(err)
 						return c.JSON(response.Code, response)
@@ -121,17 +121,17 @@ func VerifIdemKey(next echo.HandlerFunc) echo.HandlerFunc {
 				default:
 					err = StoreRedis(header.IdempotencyKey, request, time.Second*time.Duration(session))
 					if err != nil {
-						LogE("[%s] VerifIdemKey: failed to store request in redis method=%s path=%s key=%s err=%v",
+						LogE("%s [%s] failed to store request in redis method=%s path=%s key=%s err=%v", buildLogPrefix("VerifIdemKey"),
 							requestID, requestMethod, requestPath, header.IdempotencyKey, err)
 						response.InternalServerError(err)
 						return c.JSON(response.Code, response)
 					}
 				}
-				LogD("[%s] VerifIdemKey: stored new request method=%s path=%s key=%s ttl=%ds",
+				LogD("%s [%s] stored new request method=%s path=%s key=%s ttl=%ds", buildLogPrefix("VerifIdemKey"),
 					requestID, requestMethod, requestPath, header.IdempotencyKey, session)
 			case false:
 				// Redis error (not key not found)
-				LogE("[%s] VerifIdemKey: redis error method=%s path=%s key=%s err=%v",
+				LogE("%s [%s] redis error method=%s path=%s key=%s err=%v", buildLogPrefix("VerifIdemKey"),
 					requestID, requestMethod, requestPath, header.IdempotencyKey, err)
 				response.InternalServerError(err)
 				return c.JSON(response.Code, response)
@@ -215,10 +215,10 @@ func VerifyMD5(idemKey string, request []byte) (string, error) {
 
 	md5Generated := hex.EncodeToString(hash.Sum(nil))
 
-	LogD("VerifyMD5: submitted_key=%s generated_key=%s", idemKey, md5Generated)
+	LogD("%s submitted_key=%s generated_key=%s", buildLogPrefix("VerifyMD5"), idemKey, md5Generated)
 
 	if idemKey != md5Generated {
-		LogW("VerifyMD5: key mismatch submitted=%s expected=%s", idemKey, md5Generated)
+		LogW("%s key mismatch submitted=%s expected=%s", buildLogPrefix("VerifyMD5"), idemKey, md5Generated)
 		return "key not valid", nil
 	}
 

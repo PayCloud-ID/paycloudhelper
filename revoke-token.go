@@ -30,7 +30,7 @@ type revokeToken struct {
 }
 
 func logVerifyTokenErr(ctx echo.Context, requestID, info string) {
-	LogE("[%s] %s => %s", requestID, ctx.Request().RequestURI, info)
+	LogE("%s [%s] uri=%s info=%s", buildLogPrefix("logVerifyTokenErr"), requestID, ctx.Request().RequestURI, info)
 }
 
 func RevokeToken(next echo.HandlerFunc) echo.HandlerFunc {
@@ -61,7 +61,7 @@ func RevokeToken(next echo.HandlerFunc) echo.HandlerFunc {
 		var token *jwt.Token
 		token, err := jwt.Parse(tokens[1], func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-				LogW("[%s] middlewares.GetTokenClaims() token : %v", requestID, token.Method.(*jwt.SigningMethodRSA))
+				LogW("%s [%s] invalid signing method token=%v", buildLogPrefix("RevokeToken"), requestID, token.Method.(*jwt.SigningMethodRSA))
 				return nil, errors.New("invalid signing method")
 			}
 			pbKey := os.Getenv("APP_PUBLIC_KEY")
@@ -106,11 +106,11 @@ func RevokeToken(next echo.HandlerFunc) echo.HandlerFunc {
 		data, err := GetRedis(key)
 		if err != nil {
 			if strings.Contains(err.Error(), "redis: nil") {
-				LogD("[%s] RevokeToken: no revoke token found for merchant=%d", requestID, int(merchantId))
+				LogD("%s [%s] no revoke token found merchant=%d", buildLogPrefix("RevokeToken"), requestID, int(merchantId))
 				return next(ctx)
 			}
 			LoggerErrorHub(err)
-			LogE("[%s] RevokeToken: redis error merchant=%d err=%v", requestID, int(merchantId), err)
+			LogE("%s [%s] redis error merchant=%d err=%v", buildLogPrefix("RevokeToken"), requestID, int(merchantId), err)
 			response.InternalServerError(err)
 			return ctx.JSON(response.Code, response)
 		}
@@ -118,18 +118,18 @@ func RevokeToken(next echo.HandlerFunc) echo.HandlerFunc {
 		err = jsoniter.ConfigFastest.Unmarshal([]byte(data), &value)
 		if err != nil {
 			LoggerErrorHub(err)
-			LogE("[%s] RevokeToken: failed to unmarshal revoke data merchant=%d err=%v", requestID, int(merchantId), err)
+			LogE("%s [%s] failed to unmarshal revoke data merchant=%d err=%v", buildLogPrefix("RevokeToken"), requestID, int(merchantId), err)
 			response.InternalServerError(err)
 			return ctx.JSON(response.Code, response)
 		}
 
 		if _, ok := listStatusRevoke[value.Status]; ok {
-			LogW("[%s] RevokeToken: merchant has been %s merchant=%d status=%d", requestID, listStatusRevoke[value.Status], int(merchantId), value.Status)
+			LogW("%s [%s] merchant has been %s merchant=%d status=%d", buildLogPrefix("RevokeToken"), requestID, listStatusRevoke[value.Status], int(merchantId), value.Status)
 			response.Unauthorized("revoke jwt token", strconv.Itoa(value.Status))
 			return ctx.JSON(response.Code, response)
 		}
 
-		LogD("[%s] RevokeToken: token validated merchant=%d", requestID, int(merchantId))
+		LogD("%s [%s] token validated merchant=%d", buildLogPrefix("RevokeToken"), requestID, int(merchantId))
 		return next(ctx)
 	}
 }

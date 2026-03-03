@@ -138,13 +138,13 @@ func LogSetLevel(levelName string) {
 // LogJ logs arg as compact JSON.
 func LogJ(arg interface{}) {
 	data := phhelper.ToJson(arg)
-	LogI("%s", data)
+	LogI("%s %s", phhelper.BuildLogPrefix("LogJ"), data)
 }
 
 // LogJI logs arg as indented JSON.
 func LogJI(arg interface{}) {
 	data := phhelper.ToJsonIndent(arg)
-	LogI("%s", data)
+	LogI("%s %s", phhelper.BuildLogPrefix("LogJI"), data)
 }
 
 // LogErr logs an error value.

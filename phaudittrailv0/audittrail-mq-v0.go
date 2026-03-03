@@ -29,11 +29,11 @@ func SetUpRabbitMq(host, port, vhost, username, password, auditTrailQue, appName
 
 	// set connection to rabbit mq
 	urlStr := host + ":" + port + "/" + vhost
-	phlogger.LogI("[AMQP] Init %s. queue: %s", urlStr, auditTrailQue)
+	phlogger.LogI("%s init url=%s queue=%s", phhelper.BuildLogPrefix("SetUpRabbitMq"), urlStr, auditTrailQue)
 	rmq.uriConnection = "amqp://" + username + ":" + password + "@" + urlStr
 	conn, ch, err := rmq.startRQConnection()
 	if err != nil {
-		phlogger.LogE("[AMQP] %s ERR open connection to rabbit: %v", auditTrailQue, err)
+		phlogger.LogE("%s open connection failed queue=%s err=%v", phhelper.BuildLogPrefix("SetUpRabbitMq"), auditTrailQue, err)
 		return *rmq
 	}
 
@@ -60,7 +60,7 @@ func (r *RMqAutoConnect) startRQConnection() (conn *amqp.Connection, ch *amqp.Ch
 		maxTrialMinute = 5 // 10 minute
 	)
 
-	phlogger.LogI("[AMQP] open connection to rabbit mq ...")
+	phlogger.LogI("%s opening connection to rabbitmq", phhelper.BuildLogPrefix("startRQConnection"))
 	cfg := amqp.Config{
 		Properties: amqp.Table{
 			"connection_name": "audit-trail-" + phhelper.GetAppName(),
@@ -77,10 +77,10 @@ func (r *RMqAutoConnect) startRQConnection() (conn *amqp.Connection, ch *amqp.Ch
 			// retry connect to rabbit by sleep time
 			switch {
 			case retry <= maxTrialSecond:
-				phlogger.LogI("[AMQP] try to reconnect in 30 seconds ...")
+				phlogger.LogI("%s reconnect delay=30s", phhelper.BuildLogPrefix("startRQConnection"))
 				<-time.After(time.Duration(30) * time.Second)
 			case retry <= maxTrialMinute:
-				phlogger.LogI("[AMQP] try to reconnect in 10 minutes ...")
+				phlogger.LogI("%s reconnect delay=10m", phhelper.BuildLogPrefix("startRQConnection"))
 				<-time.After(time.Duration(10) * time.Minute)
 			default:
 				// send notif to sentry
@@ -90,10 +90,10 @@ func (r *RMqAutoConnect) startRQConnection() (conn *amqp.Connection, ch *amqp.Ch
 		break
 	}
 
-	phlogger.LogI("[AMQP] connected to rabbit mq successfully")
+	phlogger.LogI("%s connected to rabbitmq successfully", phhelper.BuildLogPrefix("startRQConnection"))
 
 	//declare channel
-	phlogger.LogI("[AMQP] open channel ...")
+	phlogger.LogI("%s opening channel", phhelper.BuildLogPrefix("startRQConnection"))
 
 	r.ch, err = r.conn.Channel()
 	if err != nil {
@@ -101,7 +101,7 @@ func (r *RMqAutoConnect) startRQConnection() (conn *amqp.Connection, ch *amqp.Ch
 		log.Panicln(err.Error())
 	}
 
-	phlogger.LogI("[AMQP] opening channel succeed")
+	phlogger.LogI("%s channel opened successfully", phhelper.BuildLogPrefix("startRQConnection"))
 
 	return r.conn, r.ch, nil
 }
@@ -132,7 +132,7 @@ func checkIfQueueExists(channel *amqp.Channel, queueName string) (bool, error) {
 
 	if err != nil {
 		// queue does not exists
-		phlogger.LogE("[AMQP] ERR queue %s does not exists", queueName)
+		phlogger.LogE("%s queue does not exist queue=%s", phhelper.BuildLogPrefix("checkIfQueueExists"), queueName)
 		return false, err
 	}
 
@@ -142,14 +142,14 @@ func checkIfQueueExists(channel *amqp.Channel, queueName string) (bool, error) {
 // PushMessage push message to audittrail queue
 func PushMessage(data interface{}) {
 	if Que == nil {
-		phlogger.LogE("[AMQP] ERR queue does not exists")
+		phlogger.LogE("%s queue does not exist", phhelper.BuildLogPrefix("PushMessage"))
 		// TODO : send sentry error
 		return
 	}
 
 	msgBytes, err := phhelper.JsonMarshalNoEsc(data)
 	if err != nil {
-		phlogger.LogE("[AMQP] ERR convert data to byte : %v", err)
+		phlogger.LogE("%s convert data to bytes failed err=%v", phhelper.BuildLogPrefix("PushMessage"), err)
 		// TODO : send sentry error
 		return
 	}
@@ -167,7 +167,7 @@ func PushMessage(data interface{}) {
 		)
 		if err != nil {
 			// TODO : send sentry error
-			phlogger.LogE("[AMQP] ERR declaring queue : %v", err)
+			phlogger.LogE("%s declaring queue failed err=%v", phhelper.BuildLogPrefix("PushMessage"), err)
 			return
 		}
 	}
@@ -186,9 +186,9 @@ func PushMessage(data interface{}) {
 
 	if err != nil {
 		// TODO : send sentry error
-		phlogger.LogE("[AMQP] ERR publish message to queue %s %v", *Que, err)
+		phlogger.LogE("%s publish message failed queue=%s err=%v", phhelper.BuildLogPrefix("PushMessage"), *Que, err)
 		return
 	}
 
-	phlogger.LogI("[AMQP] Publish message async to queue %s successfully", *Que)
+	phlogger.LogI("%s publish message async success queue=%s", phhelper.BuildLogPrefix("PushMessage"), *Que)
 }

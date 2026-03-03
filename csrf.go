@@ -29,7 +29,7 @@ func VerifCsrf(next echo.HandlerFunc) echo.HandlerFunc {
 		validate := header.ValiadateHeaderCsrf()
 		if validate != nil {
 			LoggerErrorHub("invalid validation")
-			LogI("[%s] VerifCsrf: validation failed validation=%s", requestID, JSONEncode(validate))
+			LogI("%s [%s] validation failed validation=%s", buildLogPrefix("VerifCsrf"), requestID, JSONEncode(validate))
 			response.BadRequest("invalid validation", "")
 			return c.JSON(response.Code, response)
 		}
@@ -41,18 +41,18 @@ func VerifCsrf(next echo.HandlerFunc) echo.HandlerFunc {
 			switch strings.Contains(err.Error(), "redis: nil") {
 			case true:
 				LoggerErrorHub("token csrf not found")
-				LogI("[%s] VerifCsrf: token not found token=%s", requestID, header.Csrf)
+				LogI("%s [%s] token not found token=%s", buildLogPrefix("VerifCsrf"), requestID, header.Csrf)
 				response.Unauthorized("token invalid", "")
 				return c.JSON(response.Code, response)
 			case false:
 				LoggerErrorHub(err)
-				LogE("[%s] VerifCsrf: redis error token=%s err=%v", requestID, header.Csrf, err)
+				LogE("%s [%s] redis error token=%s err=%v", buildLogPrefix("VerifCsrf"), requestID, header.Csrf, err)
 				response.InternalServerError(err)
 				return c.JSON(response.Code, response)
 			}
 		}
 
-		LogD("[%s] VerifCsrf: token validated token=%s", requestID, header.Csrf)
+		LogD("%s [%s] token validated token=%s", buildLogPrefix("VerifCsrf"), requestID, header.Csrf)
 		return next(c)
 	}
 }

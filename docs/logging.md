@@ -171,6 +171,30 @@ Example:
 [WARN] 2026-02-27 10:05:25.330 [ProcessBatch] retry attempt=1 max=3
 ```
 
+## Prefix Builder (Global)
+
+`paycloudhelper` uses a shared prefix builder from `phhelper` to standardize function tags in log messages:
+
+- `phhelper.LogModulePrefix` (global const, default: `"pchelper"`)
+- `phhelper.BuildLogPrefix(functionName)`
+
+Behavior:
+
+- If `LogModulePrefix` is not empty → prefix becomes `[pchelper.FunctionName]`
+- If `LogModulePrefix` is empty → prefix becomes `[FunctionName]`
+
+Example:
+
+```go
+prefix := phhelper.BuildLogPrefix("InitializeRedisWithRetry")
+pchelper.LogE("%s failed to initialize redis err=%v", prefix, err)
+```
+
+Possible output:
+
+- with non-empty module prefix: `[pchelper.InitializeRedisWithRetry] failed to initialize redis err=...`
+- with empty module prefix: `[InitializeRedisWithRetry] failed to initialize redis err=...`
+
 ---
 
 ## Implementing in a New Service

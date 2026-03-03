@@ -75,7 +75,7 @@ func InitializeRedisWithRetry(opts RedisInitOptions) error {
 		opts.RetryDelay = 1 * time.Second
 	}
 
-	LogI("InitRedis: Starting with retry logic (max_retries=%d, base_delay=%v)...", opts.MaxRetries, opts.RetryDelay)
+	LogI("%s starting retry logic max_retries=%d base_delay=%v", buildLogPrefix("InitializeRedisWithRetry"), opts.MaxRetries, opts.RetryDelay)
 
 	redisLockKey = fmt.Sprintf("redis_lock:%s:", GetAppName())
 
@@ -86,17 +86,17 @@ func InitializeRedisWithRetry(opts RedisInitOptions) error {
 	for attempt := 1; attempt <= opts.MaxRetries; attempt++ {
 		err := initRedisClient(GetRedisOptions())
 		if err == nil {
-			LogI("InitRedis: Connected successfully on attempt %d/%d", attempt, opts.MaxRetries)
+			LogI("%s connected successfully attempt=%d/%d", buildLogPrefix("InitializeRedisWithRetry"), attempt, opts.MaxRetries)
 			return nil
 		}
 
 		lastErr = err
-		LogW("InitRedis: Attempt %d/%d failed: %v", attempt, opts.MaxRetries, err)
+		LogW("%s attempt failed attempt=%d/%d err=%v", buildLogPrefix("InitializeRedisWithRetry"), attempt, opts.MaxRetries, err)
 
 		// Exponential backoff: delay increases with each attempt
 		if attempt < opts.MaxRetries {
 			backoffDelay := opts.RetryDelay * time.Duration(attempt)
-			LogI("InitRedis: Retrying in %v...", backoffDelay)
+			LogI("%s retrying delay=%v", buildLogPrefix("InitializeRedisWithRetry"), backoffDelay)
 			time.Sleep(backoffDelay)
 		}
 	}
@@ -107,7 +107,7 @@ func InitializeRedisWithRetry(opts RedisInitOptions) error {
 	}
 
 	// Backward compatible behavior: log error but don't fail
-	LogE("InitRedis: Failed to initialize Redis client after %d attempts: %s", opts.MaxRetries, lastErr.Error())
+	LogE("%s failed to initialize redis after attempts=%d err=%s", buildLogPrefix("InitializeRedisWithRetry"), opts.MaxRetries, lastErr.Error())
 	return nil
 }
 
@@ -176,7 +176,7 @@ func InitRedisOptions(rawOpt redis.Options) *redis.Options {
 	// Set custom timeout if provided
 	if redisOptions.ReadTimeout > 0 {
 		DefaultRedisTimeout = redisOptions.ReadTimeout + DefaultRedisTimeout
-		LogI("InitRedis: Custom redis timeout set to %v", DefaultRedisTimeout)
+		LogI("%s custom redis timeout set=%v", buildLogPrefix("InitRedisOptions"), DefaultRedisTimeout)
 	}
 
 	return redisOptions
@@ -192,7 +192,7 @@ func InitRedSyncOnce() error {
 		redisSyncInitErr = func() error {
 			client, err := GetRedisPoolClient()
 			if err != nil {
-				LogE(fmt.Sprintf("Failed to initialize redisSync: %s", err.Error()))
+				LogE("%s failed to initialize redsync err=%s", buildLogPrefix("InitRedSyncOnce"), err.Error())
 				return err
 			}
 
@@ -201,7 +201,7 @@ func InitRedSyncOnce() error {
 
 			// Create an instance of redSync to be used
 			redisSync = redsync.New(pool)
-			LogI("InitRedSync: redisSync initialized successfully")
+			LogI("%s redsync initialized successfully", buildLogPrefix("InitRedSyncOnce"))
 			return nil
 		}()
 	})
@@ -213,7 +213,7 @@ func GetRedisOptions() *redis.Options {
 }
 
 func GetRedisClient(redisHost, redisPort, redisPassword string, redisDb int) error {
-	LogI("InitRedis: GetRedisClient... %s:%s/%v", redisHost, redisPort, redisDb)
+	LogI("%s host=%s port=%s db=%v", buildLogPrefix("GetRedisClient"), redisHost, redisPort, redisDb)
 	if GetRedisOptions() == nil {
 		InitRedisOptions(redis.Options{
 			Addr:     redisHost + ":" + redisPort,
@@ -231,7 +231,7 @@ func initRedisClient(opt *redis.Options) error {
 	if opt == nil {
 		return errors.New("nil redis options")
 	}
-	LogI("InitRedis: Starting...")
+	LogI("%s starting redis client initialization", buildLogPrefix("initRedisClient"))
 
 	redisPoolClient = redis.NewClient(GetRedisOptions())
 
@@ -242,20 +242,20 @@ func initRedisClient(opt *redis.Options) error {
 	res, err := redisPoolClient.Ping(ctx).Result()
 	if err != nil {
 		LoggerErrorHub(err)
-		LogE("InitRedis: open redis pool connection failed")
+		LogE("%s open redis pool connection failed", buildLogPrefix("initRedisClient"))
 		return err
 	}
 
 	if GetAppName() != "" {
 		redisPoolClient.Do(context.Background(), "CLIENT", "SETNAME", GetAppName())
-		LogI("InitRedis: %v", redisPoolClient.ClientGetName(ctx))
+		LogI("%s client name=%v", buildLogPrefix("initRedisClient"), redisPoolClient.ClientGetName(ctx))
 	}
 
-	LogI("InitRedis: open redis pool connection successfully. %s", res)
+	LogI("%s open redis pool connection successful status=%s", buildLogPrefix("initRedisClient"), res)
 
 	// Initialize RedSync after Redis is initialized
 	if err := InitRedSyncOnce(); err != nil {
-		LogW("Warning: Failed to initialize redisSync: %s", err.Error())
+		LogW("%s failed to initialize redsync err=%s", buildLogPrefix("initRedisClient"), err.Error())
 	}
 
 	return nil
@@ -287,12 +287,10 @@ func StoreRedis(id string, data interface{}, duration time.Duration) error {
 }
 
 func StoreRedisWithLock(id string, data interface{}, duration time.Duration) (err error) {
-	fmtLogPrefix := "StoreRedisWithLock"
-
 	// Redis Lock
 	lockKey := redisLockKey + id
 	lockTTL := GetTrxRedisLockTimeout()
-	LogI(fmt.Sprintf("%s lock_ttl=%s lock_key=%s", fmtLogPrefix, lockTTL, lockKey))
+	LogI("%s lock_ttl=%s lock_key=%s", buildLogPrefix("StoreRedisWithLock"), lockTTL, lockKey)
 
 	locked, acquireErr := AcquireLock(lockKey, lockTTL)
 	if acquireErr != nil {
@@ -305,12 +303,12 @@ func StoreRedisWithLock(id string, data interface{}, duration time.Duration) (er
 		return errors.New("already being updated by another process")
 	}
 
-	LogI("%s acquired lock_key=%v, lock_ttl=%v", fmtLogPrefix, lockKey, lockTTL)
+	LogI("%s lock acquired key=%v ttl=%v", buildLogPrefix("StoreRedisWithLock"), lockKey, lockTTL)
 	defer func() {
 		releaseErr := ReleaseLock(lockKey)
 		if releaseErr != nil {
 			// error releasing lock
-			LogD(fmt.Sprintf("%s ERR releasing lock: %s", fmtLogPrefix, releaseErr.Error()))
+			LogD("%s release lock failed err=%s", buildLogPrefix("StoreRedisWithLock"), releaseErr.Error())
 		}
 	}()
 
@@ -401,7 +399,7 @@ func AcquireLock(key string, ttl time.Duration) (bool, error) {
 	if err != nil {
 		if err == redsync.ErrFailed {
 			// Lock not acquired but no error occurred (already held by another process)
-			LogD("AcquireLock: lock already held key=%s", key)
+			LogD("%s lock already held key=%s", buildLogPrefix("AcquireLock"), key)
 			return false, nil
 		}
 		return false, &LockError{
@@ -414,7 +412,7 @@ func AcquireLock(key string, ttl time.Duration) (bool, error) {
 
 	// Store the mutex in a map for later release
 	StoreMutex(key, mutex)
-	LogD("AcquireLock: lock acquired key=%s ttl=%s", key, ttl)
+	LogD("%s lock acquired key=%s ttl=%s", buildLogPrefix("AcquireLock"), key, ttl)
 
 	return true, nil
 }
@@ -455,7 +453,7 @@ func ReleaseLock(key string) error {
 
 	// Remove the mutex from the map
 	RemoveMutex(key)
-	LogD("ReleaseLock: lock released key=%s", key)
+	LogD("%s lock released key=%s", buildLogPrefix("ReleaseLock"), key)
 
 	return nil
 }

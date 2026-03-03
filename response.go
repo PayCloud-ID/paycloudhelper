@@ -46,7 +46,7 @@ func (r *ResponseApi) Success(message string, data interface{}) {
 }
 
 func LoggerErrorHub(err interface{}, args ...interface{}) {
-	logData := fmt.Sprintf("ERR : %v", err)
+	logData := fmt.Sprintf("%s ERR : %v", buildLogPrefix("LoggerErrorHub"), err)
 	if len(args) > 0 {
 		logData += fmt.Sprintf(" %v ", args[0])
 	}
