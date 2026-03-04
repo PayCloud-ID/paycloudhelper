@@ -121,13 +121,39 @@ func captureWithBreadcrumb(
 			Category: category,
 			Message:  breadcrumbMessage,
 			Data: map[string]interface{}{
-				"Service":  service,
-				"Module":   module,
-				"Function": function,
+				"service":  service,
+				"module":   module,
+				"function": function,
 			},
 		}, 5)
 		capture(hub)
 	})
+}
+
+// extractLogPrefix splits a log message formatted as "[Prefix] body" into
+// (exType, exValue). exType is used as the Sentry exception type (issue title),
+// exValue is the exception value (error message). If no bracket prefix is found,
+// exType defaults to "Log" and exValue is the full message.
+func extractLogPrefix(message string) (exType, exValue string) {
+	msg := strings.TrimSpace(message)
+	if strings.HasPrefix(msg, "[") {
+		end := strings.Index(msg, "]")
+		if end > 1 {
+			return msg[1:end], strings.TrimSpace(msg[end+1:])
+		}
+	}
+	return "Log", msg
+}
+
+// buildSentryTitle constructs a stable Sentry exception Type used as the issue title.
+// Format: [exPrefix] [env=environment]
+// Keeping server_name and level out of the type preserves cross-pod issue grouping.
+func buildSentryTitle(exPrefix string) string {
+	env := phhelper.GetAppEnv()
+	if sentryClientOptions != nil && sentryClientOptions.Environment != "" {
+		env = sentryClientOptions.Environment
+	}
+	return fmt.Sprintf("[%s] [env=%s]", exPrefix, env)
 }
 
 func isSentryDate(s string) bool {
@@ -426,15 +452,42 @@ func SendSentryEvent(event *sentry.Event, args ...string) {
 // This is called by log hook subscribers — do not call directly.
 // level: "debug" | "info" | "warn" | "error" | "fatal"
 // message: formatted log string
+//
+// For error and fatal levels the event is sent as a structured exception so that
+// Sentry populates the "error message" field and splits the issue title cleanly:
+//   - Exception.Type  → the [FunctionName] bracket prefix (e.g. "ReadyCheck")
+//   - Exception.Value → the rest of the message (the actual error detail)
+//
+// All other levels are sent as plain messages.
 func ReceiveLog(level, message string) {
 	if sentryClient == nil {
 		return
 	}
 	hub := sentry.NewHub(sentryClient, sentry.NewScope())
 	hub.WithScope(func(scope *sentry.Scope) {
-		scope.SetLevel(sentryLevelFor(level))
+		sentryLevel := sentryLevelFor(level)
+		scope.SetLevel(sentryLevel)
 		addDefaultBreadcrumb(scope, level, message)
-		hub.CaptureMessage(message)
+
+		if level == "error" || level == "fatal" {
+			// Exception.Type  → "[FunctionName] [env=development]"  — stable, groups across pods
+			// Exception.Value → "[error] actual error detail"         — level visible in the message
+			// Example title: "[main.initSentry] [env=development]: [error] readiness check failed"
+			exType, exValue := extractLogPrefix(message)
+			event := &sentry.Event{
+				Level:   sentryLevel,
+				Message: message,
+				Exception: []sentry.Exception{
+					{
+						Type:  buildSentryTitle(exType),
+						Value: fmt.Sprintf("[%s] %s", level, exValue),
+					},
+				},
+			}
+			hub.CaptureEvent(event)
+		} else {
+			hub.CaptureMessage(message)
+		}
 	})
 }
 

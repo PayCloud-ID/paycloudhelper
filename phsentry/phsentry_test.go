@@ -3,8 +3,11 @@ package phsentry
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/getsentry/sentry-go"
 )
 
 func TestNormalizeSentryDiagnosticMessage_StripsSdkPrefixAndTimestamp(t *testing.T) {
@@ -106,5 +109,92 @@ func TestSentryLevelFor_MapsCorrectly(t *testing.T) {
 		if string(got) != tt.expected {
 			t.Errorf("sentryLevelFor(%q) = %q, want %q", tt.input, got, tt.expected)
 		}
+	}
+}
+
+func TestExtractLogPrefix_BracketPrefix(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		wantType string
+		wantVal  string
+	}{
+		{
+			name:     "standard prefix",
+			input:    "[ReadyCheck] readiness check failed err=unhealthy",
+			wantType: "ReadyCheck",
+			wantVal:  "readiness check failed err=unhealthy",
+		},
+		{
+			name:     "pchelper dotted prefix",
+			input:    "[pchelper.InitRedis] failed to connect host=localhost",
+			wantType: "pchelper.InitRedis",
+			wantVal:  "failed to connect host=localhost",
+		},
+		{
+			name:     "no bracket prefix falls back to Log",
+			input:    "plain message without prefix",
+			wantType: "Log",
+			wantVal:  "plain message without prefix",
+		},
+		{
+			name:     "empty string falls back to Log",
+			input:    "",
+			wantType: "Log",
+			wantVal:  "",
+		},
+		{
+			name:     "prefix only no body",
+			input:    "[MyFunc]",
+			wantType: "MyFunc",
+			wantVal:  "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotType, gotVal := extractLogPrefix(tt.input)
+			if gotType != tt.wantType {
+				t.Errorf("extractLogPrefix() type = %q, want %q", gotType, tt.wantType)
+			}
+			if gotVal != tt.wantVal {
+				t.Errorf("extractLogPrefix() value = %q, want %q", gotVal, tt.wantVal)
+			}
+		})
+	}
+}
+
+func TestReceiveLog_ErrorLevelNilClientNoPanic(t *testing.T) {
+	sentryClient = nil
+	// Should not panic; nil client guard must work for error level too.
+	ReceiveLog("error", "[ReadyCheck] readiness check failed err=unhealthy gRPC services")
+}
+
+func TestReceiveLog_InfoLevelNilClientNoPanic(t *testing.T) {
+	sentryClient = nil
+	ReceiveLog("info", "[InitSentry] Sentry initialized dsn=https://example.sentry.io")
+}
+
+func TestBuildSentryTitle_FormatContainsAllParts(t *testing.T) {
+	prev := sentryClientOptions
+	defer func() { sentryClientOptions = prev }()
+
+	sentryClientOptions = &sentry.ClientOptions{
+		Environment: "staging",
+	}
+
+	got := buildSentryTitle("main.initSentry")
+	want := "[main.initSentry] [env=staging]"
+	if got != want {
+		t.Errorf("buildSentryTitle() = %q, want %q", got, want)
+	}
+}
+
+func TestBuildSentryTitle_NilClientOptionsFallsBackToAppEnv(t *testing.T) {
+	sentryClientOptions = nil
+	got := buildSentryTitle("ReadyCheck")
+	// Must start with the prefix bracket; env falls back to phhelper.GetAppEnv().
+	if !strings.HasPrefix(got, "[ReadyCheck] [env=") {
+		t.Errorf("buildSentryTitle() = %q, expected prefix \"[ReadyCheck] [env=", got)
 	}
 }
