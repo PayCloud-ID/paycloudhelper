@@ -47,6 +47,9 @@ require (
 )
 
 retract (
+	v1.7.0-beta.3
+	v1.7.0-beta.2
+	v1.7.0-beta.1
 	//bug redis error message, should be quiet
 	v1.6.3
 	//bug in audit trail unsafe push, should be safe

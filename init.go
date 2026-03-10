@@ -64,8 +64,11 @@ func InitializeApp() {
 	if appName := os.Getenv("APP_NAME"); appName != "" {
 		phhelper.SetAppName(appName)
 	}
+	// APP_ENV is canonical; APP_MODE is accepted as fallback (e.g. develop server .env)
 	if appEnv := os.Getenv("APP_ENV"); appEnv != "" {
 		phhelper.SetAppEnv(appEnv)
+	} else if appMode := os.Getenv("APP_MODE"); appMode != "" {
+		phhelper.SetAppEnv(appMode)
 	}
 
 	// Validate configuration and log warnings
