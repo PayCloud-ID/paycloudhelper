@@ -2,6 +2,8 @@ package paycloudhelper
 
 import (
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"bitbucket.org/paycloudid/paycloudhelper/phhelper"
@@ -9,7 +11,21 @@ import (
 
 var (
 	auditTrailMqClient *AmqpClient
+
+	// auditIDCounter provides unique, collision-free IDs for audit messages.
+	auditIDCounter atomic.Int64
+
+	// Rate-limited logging for pushMessageAudit when client is not ready.
+	// Prevents log flooding under sustained RabbitMQ failure.
+	auditNotReadyLastLog   time.Time
+	auditNotReadyLogMu     sync.Mutex
+	auditNotReadyLogWindow = 30 * time.Second
 )
+
+// nextAuditID returns a unique, monotonically increasing ID for audit messages.
+func nextAuditID() int {
+	return int(auditIDCounter.Add(1))
+}
 
 // SetUpRabbitMq service must call this func in main function
 // NOTE : for audittrail purpose
@@ -50,7 +66,7 @@ func LogAudittrailProcess(funcName, desc, info string, key *[]string) {
 		}
 
 		messagePayload := MessagePayloadAudit{
-			Id:       int(time.Now().UnixNano() / 100000000),
+			Id:       nextAuditID(),
 			Command:  CmdAuditTrailProcess,
 			Time:     time.Now().Format(time.DateTime),
 			ModuleId: GetAppName(),
@@ -84,7 +100,7 @@ func LogAudittrailData(funcName, desc, source, commType string, key *[]string, d
 		}
 
 		auditPayload := MessagePayloadAudit{
-			Id:       int(time.Now().UnixNano() / 10000000),
+			Id:       nextAuditID(),
 			Command:  CmdAuditTrailData,
 			Time:     time.Now().Format(time.DateTime),
 			ModuleId: GetAppName(),
@@ -108,9 +124,18 @@ func logAuditErrorWithSentry(msg string, err error) {
 
 // pushMessageAudit push message to audit trail queue
 func pushMessageAudit(data interface{}) {
-	if auditTrailMqClient == nil || auditTrailMqClient.queueName == "" {
-		err := fmt.Errorf("%s client/queue does not exist", buildLogPrefix("pushMessageAudit"))
-		logAuditErrorWithSentry(fmt.Sprintf("%s client/queue does not exist", buildLogPrefix("pushMessageAudit")), err)
+	// Early exit: no client or client not ready (RISK-005)
+	if auditTrailMqClient == nil {
+		logAuditNotReadyRateLimited("client is nil")
+		return
+	}
+	if !auditTrailMqClient.IsReady() {
+		logAuditNotReadyRateLimited("client not ready")
+		return
+	}
+	if auditTrailMqClient.queueName == "" {
+		err := fmt.Errorf("%s queue name is empty", buildLogPrefix("pushMessageAudit"))
+		logAuditErrorWithSentry(fmt.Sprintf("%s queue name is empty", buildLogPrefix("pushMessageAudit")), err)
 		return
 	}
 
@@ -132,4 +157,17 @@ func pushMessageAudit(data interface{}) {
 	}
 
 	LogI("%s publish message async success queue=%s conn=%s", buildLogPrefix("pushMessageAudit"), auditTrailQueueName, auditTrailMqClient.connName)
+}
+
+// logAuditNotReadyRateLimited logs audit client-not-ready errors at most once per auditNotReadyLogWindow
+// to prevent log flooding under sustained RabbitMQ failure.
+func logAuditNotReadyRateLimited(reason string) {
+	auditNotReadyLogMu.Lock()
+	defer auditNotReadyLogMu.Unlock()
+	now := time.Now()
+	if now.Sub(auditNotReadyLastLog) < auditNotReadyLogWindow {
+		return
+	}
+	auditNotReadyLastLog = now
+	LogW("%s skipping audit publish: %s", buildLogPrefix("pushMessageAudit"), reason)
 }

@@ -15,6 +15,13 @@ import (
 	"bitbucket.org/paycloudid/paycloudhelper/phhelper"
 )
 
+// Push retry and timeout configuration.
+// Package-level vars allow consumer services to override before calling SetUpRabbitMq.
+var (
+	PushMaxRetries = 3                // max retry attempts for Push()
+	PushTimeout    = 15 * time.Second // total timeout for a single Push() call
+)
+
 // AmqpClient is the base struct for handling connection recovery, consumption and
 // publishing. Note that this struct has an internal mutex to safeguard against
 // data races. As you develop and iterate over this example, you may need to add
@@ -303,8 +310,8 @@ func (c *AmqpClient) changeChannel(channel *amqp.Channel) {
 }
 
 // Push will push data onto the queue, and wait for a confirmation.
-// This will block until the server sends a confirmation. Errors are
-// only returned if the push action itself fails, see UnsafePush.
+// Retries up to PushMaxRetries times with a total timeout of PushTimeout.
+// Returns an error if all retries are exhausted or the timeout is reached.
 func (c *AmqpClient) Push(data []byte) error {
 	c.m.Lock()
 	if !c.isReady {
@@ -312,23 +319,32 @@ func (c *AmqpClient) Push(data []byte) error {
 		return errors.New("[AMQP] failed to push: not connected")
 	}
 	c.m.Unlock()
-	for {
+
+	deadline := time.After(PushTimeout)
+	for attempt := 0; attempt < PushMaxRetries; attempt++ {
 		err := c.UnsafePush(data)
 		if err != nil {
-			// c.errLog.Printf("[AMQP] push failed. Retrying... err=%v\n", err)
 			select {
 			case <-c.done:
 				return errShutdown
+			case <-deadline:
+				return fmt.Errorf("[AMQP] push timeout after %v: %w", PushTimeout, err)
 			case <-time.After(resendDelay):
 			}
 			continue
 		}
-		confirm := <-c.notifyConfirm
-		if confirm.Ack {
-			//c.infoLog.Printf("[AMQP] push confirmed tag=%d queue=%s conn=%s\n", confirm.DeliveryTag, c.queueName, c.connName)
-			return nil
+		select {
+		case confirm := <-c.notifyConfirm:
+			if confirm.Ack {
+				return nil
+			}
+		case <-deadline:
+			return fmt.Errorf("[AMQP] push confirmation timeout after %v", PushTimeout)
+		case <-c.done:
+			return errShutdown
 		}
 	}
+	return fmt.Errorf("[AMQP] push failed after %d retries", PushMaxRetries)
 }
 
 // UnsafePush will push to the queue without checking for
@@ -336,6 +352,12 @@ func (c *AmqpClient) Push(data []byte) error {
 // No guarantees are provided for whether the server will
 // receive the message.
 func (c *AmqpClient) UnsafePush(data []byte) error {
+	return c.PushWithTTL(data, "60000")
+}
+
+// PushWithTTL pushes data to the queue with a configurable TTL.
+// An empty ttl means the message never expires in the queue.
+func (c *AmqpClient) PushWithTTL(data []byte, ttl string) error {
 	c.m.Lock()
 	if !c.isReady {
 		c.m.Unlock()
@@ -346,18 +368,45 @@ func (c *AmqpClient) UnsafePush(data []byte) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	pub := amqp.Publishing{
+		ContentType: "application/json",
+		Body:        data,
+	}
+	if ttl != "" {
+		pub.Expiration = ttl
+	}
+
 	return c.channel.PublishWithContext(
 		ctx,
 		"",          // Exchange
 		c.queueName, // Routing key
 		false,       // Mandatory
 		false,       // Immediate
-		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        data,
-			Expiration:  "60000",
-		},
+		pub,
 	)
+}
+
+// IsReady returns true if the AMQP client has an active connection and channel.
+func (c *AmqpClient) IsReady() bool {
+	c.m.Lock()
+	defer c.m.Unlock()
+	return c.isReady
+}
+
+// WaitForReady blocks until the client is ready or the timeout expires.
+// Returns true if ready, false if timed out.
+func (c *AmqpClient) WaitForReady(timeout time.Duration) bool {
+	deadline := time.After(timeout)
+	for {
+		if c.IsReady() {
+			return true
+		}
+		select {
+		case <-deadline:
+			return false
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
 }
 
 // Consume will continuously put queue items on the channel.
