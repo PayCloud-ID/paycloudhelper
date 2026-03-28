@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Root package: `LockError` (`Error`, `Unwrap`), Redis options (`InitRedisOptions`, `GetTrxRedisBackoff`, `GetTrxRedisLockTimeout`, `GetRedisPoolClient` when not initialized), mutex map (`StoreMutex`, `GetMutex`, `RemoveMutex`), init/app env (`SetAppName`, `SetAppEnv`, `GetAppName`, `GetAppEnv`, `InitializeApp`), validator constants and header validation (idem key, CSRF), `LoggerErrorHub`.
   - `phhelper`: globenv (Get/Set app name and env), helpers (`JsonMinify`, `JsonMarshalNoEsc`, `JSONEncode`, `ToJson`, `ToJsonIndent`).
   - `phjson`: config, `Marshal`, `Unmarshal`, `MarshalIndent`, invalid JSON handling.
+  - **Audit trail V1** (`audittrail_test.go`): nil client, empty params, nil data, zero status code, keys handling, JSON structures, rate-limited logging, not-ready early exit, concurrent ID uniqueness.
+  - **AMQP client** (`amqp_audit_test.go`): push not-ready, max retries, IsReady state, thread safety, WaitForReady timeout/success, PushWithTTL not-ready.
+  - **Audit publisher** (`audittrail_publisher_test.go`): defaults, options, worker pool processing, backpressure, circuit breaker trip/reset, stop/drain idempotency, nil/not-ready client.
+  - **Audit trail V2** (`audittrail_v2_test.go`): V1 fallback, empty params early exit, nil data, zero status code, submit to publisher, SetUpAuditTrailPublisher globals, GetAuditPublisher.
 - **Scripts**
   - `scripts/run_tests.sh` — run all tests from repo root with options: `-v`, `-race`, `-cover`, `-coverprofile`, `-short`, `-h`.
 - **CI**

@@ -230,6 +230,40 @@ pch.SendSentryMessage("something happened")
 pch.FlushSentry(2 * time.Second)  // call before process exit
 ```
 
+### Audit Trail
+
+**V1 — goroutine-per-call** (legacy, still supported):
+
+```go
+client := pch.SetUpRabbitMq(host, port, vhost, user, pass, queue, appName)
+pch.LogAudittrailData(funcName, desc, source, commType, &keys, &reqResp)
+pch.LogAudittrailProcess(funcName, desc, info, &keys)
+```
+
+- `Push()` retries up to `PushMaxRetries` (3) with `PushTimeout` (15s).
+- Nil client / not-ready → early exit with rate-limited warning.
+- Atomic counter IDs prevent collision under high throughput.
+
+**V2 — worker pool with circuit breaker** (recommended for new services):
+
+```go
+pub := pch.SetUpAuditTrailPublisher(host, port, vhost, user, pass, queue, appName,
+    pch.WithWorkerCount(10),
+    pch.WithBufferSize(1000),
+    pch.WithMessageTTL("60000"),
+)
+pch.LogAudittrailDataV2(funcName, desc, source, commType, &keys, &reqResp)
+pch.LogAudittrailProcessV2(funcName, desc, info, &keys)
+
+// Lifecycle
+pub.Stop() // graceful drain on shutdown
+```
+
+- Bounded worker pool (default 10 workers, 1000 buffer).
+- Circuit breaker: trips after 10 consecutive failures, 30s cooldown.
+- Falls back to V1 goroutine-per-call when publisher is nil.
+- Functional options: `WithWorkerCount`, `WithBufferSize`, `WithMaxRetries`, `WithPublishTimeout`, `WithMessageTTL`, `WithCircuitBreakerThreshold`, `WithCircuitBreakerCooldown`.
+
 ### Middleware (Echo)
 
 ```go

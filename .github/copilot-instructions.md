@@ -40,10 +40,10 @@
 - **Timeout handling**: `DefaultRedisTimeout` = 1s + custom `ReadTimeout`
 
 ### RabbitMQ Integration
-- **AmqpClient** (`amqp.go`): Auto-reconnecting AMQP wrapper with mutex-protected state
-- **Audit trail**: Async publishing via goroutines in `LogAudittrailProcess()` / `LogAudittrailData()`
+- **AmqpClient** (`amqp.go`): Auto-reconnecting AMQP wrapper with mutex-protected state, finite retries, and publish timeouts
+- **Audit trail V1**: Async publishing via goroutines in `LogAudittrailProcess()` / `LogAudittrailData()`
+- **Audit trail V2**: Worker pool with circuit breaker via `SetUpAuditTrailPublisher()` + `LogAudittrailDataV2()` / `LogAudittrailProcessV2()` (falls back to V1 when publisher is nil)
 - **Connection naming**: `"audittrail-{AppName}"` for observability
-- **Error handling**: Log errors locally, TODO comments indicate future Sentry integration
 
 ### Echo Middleware Conventions
 - **VerifIdemKey**: Idempotency via Redis + MD5 hashing, returns `202 Accepted` for duplicate requests

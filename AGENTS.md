@@ -155,6 +155,28 @@ AcquireLockWithRetry(key, ttl, retries, delay)             // distributed lock
 ReleaseLockWithRetry(mutex, retries)                       // release
 ```
 
+### Audit Trail (V1 + V2)
+
+**V1 — goroutine-per-call** (legacy, still supported):
+
+```go
+client := SetUpRabbitMq(host, port, vhost, user, pass, queue, appName)
+LogAudittrailData(funcName, desc, source, commType, &keys, &reqResp)
+LogAudittrailProcess(funcName, desc, info, &keys)
+```
+
+**V2 — worker pool with circuit breaker** (recommended for new services):
+
+```go
+pub := SetUpAuditTrailPublisher(host, port, vhost, user, pass, queue, appName,
+    WithWorkerCount(10), WithBufferSize(1000), WithMessageTTL("60000"))
+LogAudittrailDataV2(funcName, desc, source, commType, &keys, &reqResp)
+LogAudittrailProcessV2(funcName, desc, info, &keys)
+// Falls back to V1 when publisher is nil
+```
+
+Key types: `AuditPublisher`, `MessagePayloadAudit`, `AuditTrailData`, `AuditTrailProcess`, `RequestAndResponse`.
+
 ### Middleware (Echo)
 
 ```go
