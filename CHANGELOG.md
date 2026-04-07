@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Audit trail V2** (`audittrail_v2_test.go`): V1 fallback, empty params early exit, nil data, zero status code, submit to publisher, SetUpAuditTrailPublisher globals, GetAuditPublisher.
 - **Scripts**
   - `scripts/run_tests.sh` — run all tests from repo root with options: `-v`, `-race`, `-cover`, `-coverprofile`, `-short`, `-h`.
+  - `scripts/generate-makefile.sh` — auto-detect library vs binary service and emit `Makefile` + `run.sh` (optional `proto`, `cicd`/`docker-build`, `db-validate` when applicable).
+- **Build**
+  - Root `Makefile` — `help`, `deps`, `build`, `vet`, `test`, `test-race`, `test-cover`, `fmt`, `clean`.
+  - Root `run.sh` — for this library repo, runs `go test -race ./...` (`--debug` sets `GODEBUG`).
 - **CI**
   - Bitbucket Pipelines (`bitbucket-pipelines.yml`): on every push to `develop` and `main` (and default branches), run `go build ./...`, `go vet ./...`, `go test ./...`. Pipeline fails if any step fails.
 - **Documentation**

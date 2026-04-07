@@ -334,6 +334,13 @@ go test ./... -cover
 go test ./... -coverprofile=coverage.out -covermode=atomic
 ```
 
+**Makefile / `run.sh`:** targets mirror CI (`build`, `vet`, `test`) plus `test-race`, `test-cover`, and `deps`. For this repo (library, no `main`), `./run.sh` runs `go test -race ./...`. Regenerate or adapt for other layouts:
+
+```bash
+make help
+./scripts/generate-makefile.sh [--service-path DIR] [--dry-run]
+```
+
 ### Code quality
 
 - **Lint:** `go vet ./...`
