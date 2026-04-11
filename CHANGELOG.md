@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`phs3minio` helper package** (`phs3minio/types.go`, `phs3minio/build.go`, `phs3minio/operations.go`): Added transport-neutral S3MinIO DTOs and reusable workflows for presigned URL retrieval and upload execution. Includes standardized request builders (`BuildDownloadRequest`, `BuildUploadRequestForMultipart`, `BuildUploadRequestForFile`) and response validation with explicit error values for nil/invalid responses.
+- **`phs3minio` unit tests** (`phs3minio/operations_test.go`): Added table-driven tests for success and failure paths covering download/upload execution and multipart upload handling.
+
 - **`AuditPublisher` worker pool** (`audittrail_publisher.go`): Production-grade audit publishing with bounded concurrency (default 10 workers), buffered channel (default 1000), circuit breaker (10 failures → 30s cooldown), and configurable message TTL. Functional options: `WithWorkerCount`, `WithBufferSize`, `WithMaxRetries`, `WithPublishTimeout`, `WithMessageTTL`, `WithCircuitBreakerThreshold`, `WithCircuitBreakerCooldown`.
 - **`SetUpAuditTrailPublisher()`** (`audittrail_v2.go`): New setup function that creates AMQP client + worker pool. Existing `SetUpRabbitMq` unchanged — services migrate at their own pace.
 - **`LogAudittrailDataV2()` / `LogAudittrailProcessV2()`** (`audittrail_v2.go`): Worker-pool-based V2 audit functions. Fall back to legacy V1 goroutine-per-call behavior when publisher is nil.

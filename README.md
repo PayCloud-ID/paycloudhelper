@@ -68,6 +68,7 @@ pch.ConfigureLogForwarding(pch.LogForwardConfig{
 | `phhelper` | `phhelper/` | Global state (`APP_NAME`, `APP_ENV`), JSON/string helpers |
 | `phaudittrailv0` | `phaudittrailv0/` | Legacy v0 audit trail (RabbitMQ) |
 | `phjson` | `phjson/` | Sonic JSON wrapper for high-throughput consumers |
+| `phs3minio` | `phs3minio/` | Transport-neutral DTOs + reusable upload/download workflows for S3MinIO clients |
 
 ---
 
@@ -218,6 +219,34 @@ pch.ReleaseLockWithRetry(mutex, retries)
 ```
 
 ### Sentry
+
+### S3MinIO Helper (`phs3minio`)
+
+`phs3minio` centralizes repeated request-building and response-validation logic that was duplicated across services.
+It is transport-neutral: services can keep their own protobuf stubs and map to/from shared DTOs.
+
+```go
+import "bitbucket.org/paycloudid/paycloudhelper/phs3minio"
+
+// Adapter implements phs3minio.Downloader by mapping to local gRPC client code.
+type Adapter struct{}
+
+func (a Adapter) Download(ctx context.Context, req *phs3minio.DownloadRequest) (*phs3minio.DownloadResponse, error) {
+    // map req to service-specific protobuf request and call downstream client
+    return &phs3minio.DownloadResponse{Code: phs3minio.CodeOK, Data: "https://..."}, nil
+}
+
+url, err := phs3minio.GetPresignedURL(ctx, Adapter{}, "file.pdf", userID, merchantID, "path", "bucket", 300)
+```
+
+Available helpers:
+- `BuildDownloadRequest`
+- `BuildUploadRequestForMultipart`
+- `BuildUploadRequestForFile`
+- `GetPresignedURL`
+- `UploadByMultipart`
+- `UploadByFile`
+- `UploadByRequest`
 
 ```go
 pch.InitSentry(pch.SentryOptions{
