@@ -1,4 +1,10 @@
-.PHONY: help deps build vet test test-race test-cover fmt clean
+.PHONY: help deps build vet test test-race test-cover fmt clean \
+	scripts.list script.run \
+	buf.lint \
+	proto.s3minio.update proto.s3minio.gen proto.s3minio.lint proto.s3minio.breaking proto.s3minio.check proto.service.scaffold \
+	ci.check.direct-http ci.check.stub-drift
+
+BUF ?= buf
 
 help: ## Display Makefile targets
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z0-9_.-]+:.*?## / {printf "\033[36m%-24s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -30,3 +36,43 @@ fmt: ## Run go fmt on all packages
 
 clean: ## Remove coverage output
 	rm -f coverage.out
+
+scripts.list: ## List executable scripts under scripts/
+	@find scripts -type f -name '*.sh' -print | sort
+
+script.run: ## Run any script: make script.run SCRIPT=scripts/proto/check-stub-drift.sh
+	@test -n "$(SCRIPT)" || { echo "SCRIPT is required"; exit 1; }
+	@test -f "$(SCRIPT)" || { echo "Script not found: $(SCRIPT)"; exit 1; }
+	@bash "$(SCRIPT)"
+
+proto.s3minio.update: ## Update S3MinIO proto snapshot into SDK paths
+	@bash scripts/proto/update-s3minio-proto.sh
+
+buf.lint: ## Run buf lint from repo root (same as Bitbucket Pipelines; requires buf in PATH)
+	@command -v $(BUF) >/dev/null 2>&1 || { echo "buf is required in PATH (e.g. go install github.com/bufbuild/buf/cmd/buf@v1.50.0)"; exit 1; }
+	@$(BUF) lint && printf '%s\n' 'buf.lint: OK (no violations)'
+
+proto.s3minio.gen: ## Validate S3MinIO SDK compiles against proto snapshot (hand-maintained pb/)
+	@bash scripts/proto/gen-s3minio-client.sh
+
+proto.s3minio.lint: ## Lint S3MinIO proto with buf (requires buf in PATH)
+	@command -v $(BUF) >/dev/null 2>&1 || { echo "buf is required in PATH"; exit 1; }
+	@$(BUF) lint sdk/services/s3minio/proto && printf '%s\n' 'proto.s3minio.lint: OK (no violations)'
+
+proto.s3minio.breaking: ## Run buf breaking check for the S3MinIO proto module
+	@command -v $(BUF) >/dev/null 2>&1 || { echo "buf is required in PATH"; exit 1; }
+	@$(BUF) breaking sdk/services/s3minio/proto --against .git#branch=HEAD
+
+proto.s3minio.check: ## Run lint plus stub/proto drift checks for S3MinIO foundation
+	@$(MAKE) proto.s3minio.lint
+	@bash scripts/proto/check-stub-drift.sh
+
+proto.service.scaffold: ## Scaffold sdk/services/<service> structure: make proto.service.scaffold SERVICE=clientpg
+	@test -n "$(SERVICE)" || { echo "SERVICE is required"; exit 1; }
+	@bash scripts/proto/new-service-scaffold.sh "$(SERVICE)"
+
+ci.check.direct-http: ## Ensure no direct internal s3minio HTTP usage outside approved adapters
+	@bash scripts/check-no-direct-s3minio-http.sh
+
+ci.check.stub-drift: ## Alias for stub drift check used by CI
+	@bash scripts/proto/check-stub-drift.sh

@@ -11,6 +11,7 @@
 - **Module:** `bitbucket.org/paycloudid/paycloudhelper`
 - **Auto-init:** `init()` runs automatically on import → explicit calls needed for Redis/RabbitMQ/Sentry
 - **Backward compat:** NEVER change existing exported function signatures
+- **Service SDKs:** use `sdk/services/<service>/...` as the canonical path for shared service integrations
 - **Logging:** `LogI/LogE/LogW/LogD` with `[FunctionName]` context prefix
 - **Redis locks:** Use `AcquireLockWithRetry` + `sync.Once` for init, never raw nil checks
 - **Tests:** `go test -race ./...` required for any concurrency/init changes
@@ -89,6 +90,8 @@
 - **`phsentry/`**: Sentry error tracking integration
 - **`phaudittrailv0/`**: Legacy audit trail (v0 protocol)
 - **`phjson/`**: JSON manipulation utilities
+- **`sdk/services/`**: Service-scoped SDKs (`helper`, `grpc`, `http`, `pb`, `proto`, `facade`)
+- **`sdk/shared/`**: Shared transport, observability, and error primitives for future SDKs
 
 ## Key Dependencies
 - **Echo v4**: Web framework for middleware

@@ -49,21 +49,20 @@ func TestConfigError(t *testing.T) {
 
 // TestValidateConfiguration tests configuration validation
 func TestValidateConfiguration(t *testing.T) {
-	// Save current env
-	oldAppName := os.Getenv("APP_NAME")
-	oldAppEnv := os.Getenv("APP_ENV")
-
-	defer func() {
-		os.Setenv("APP_NAME", oldAppName)
-		os.Setenv("APP_ENV", oldAppEnv)
-	}()
+	// Restore in-memory app identity; per-subtest env changes use t.Setenv (race-safe with parallel tests).
+	oldMemName := GetAppName()
+	oldMemEnv := GetAppEnv()
+	t.Cleanup(func() {
+		SetAppName(oldMemName)
+		SetAppEnv(oldMemEnv)
+	})
 
 	t.Run("with all environment variables set", func(t *testing.T) {
-		os.Setenv("APP_NAME", "test-app")
-		os.Setenv("APP_ENV", "testing")
-		os.Setenv("SENTRY_DSN", "https://example@sentry.io/123456")
-		os.Setenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
-		os.Setenv("APP_PUBLIC_KEY", "-----BEGIN PUBLIC KEY-----")
+		t.Setenv("APP_NAME", "test-app")
+		t.Setenv("APP_ENV", "testing")
+		t.Setenv("SENTRY_DSN", "https://example@sentry.io/123456")
+		t.Setenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
+		t.Setenv("APP_PUBLIC_KEY", "-----BEGIN PUBLIC KEY-----")
 
 		errors := ValidateConfiguration()
 
@@ -74,7 +73,10 @@ func TestValidateConfiguration(t *testing.T) {
 	})
 
 	t.Run("with no environment variables", func(t *testing.T) {
-		os.Clearenv()
+		t.Setenv("APP_NAME", "")
+		t.Setenv("APP_ENV", "")
+		t.Setenv("SENTRY_DSN", "")
+		t.Setenv("RABBITMQ_URL", "")
 
 		errors := ValidateConfiguration()
 
@@ -98,8 +100,8 @@ func TestValidateConfiguration(t *testing.T) {
 	})
 
 	t.Run("with invalid APP_ENV", func(t *testing.T) {
-		os.Setenv("APP_NAME", "test-app")
-		os.Setenv("APP_ENV", "invalid-env")
+		t.Setenv("APP_NAME", "test-app")
+		t.Setenv("APP_ENV", "invalid-env")
 
 		errors := ValidateConfiguration()
 

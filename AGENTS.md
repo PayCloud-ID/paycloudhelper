@@ -28,6 +28,8 @@
 | `phsentry/` | Sentry error tracking |
 | `phaudittrailv0/` | Legacy v0 audit trail |
 | `phjson/` | Sonic-based JSON wrapper for consumer opt-in performance |
+| `sdk/services/` | Service-scoped SDK layout for shared service clients and proto snapshots |
+| `sdk/shared/` | Shared runtime helpers for transport, observability, and error normalization |
 
 ### Startup Flow
 
@@ -209,6 +211,11 @@ Does the change touch an EXISTING exported function signature?
 - NEVER remove exported symbols without a deprecation cycle (MINOR → MAJOR)
 - New optional parameters → use variadic `opts ...Option` pattern
 - Deprecated functions retain original signature + route to new implementation
+
+### Service SDK Layout Rule
+
+- New shared service integrations should be added under `sdk/services/<service>/`.
+- Use `make proto.service.scaffold SERVICE=<service>` to prepare the baseline structure for additional service SDKs.
 
 **Known retractions:** v1.6.3 (verbose Redis logs), v1.6.0 (audit trail race), v1.5.2 (nil panic on init)
 

@@ -97,7 +97,8 @@ func checkRedisHealth() HealthStatus {
 func checkRabbitMQHealth() HealthStatus {
 	status := HealthStatus{Component: "rabbitmq"}
 
-	if auditTrailMqClient == nil {
+	rmq := auditTrailMqClient.Load()
+	if rmq == nil {
 		status.Status = "unhealthy"
 		status.Message = "rabbitmq client not initialized"
 		LogD("%s rabbitmq not initialized", buildLogPrefix("checkRabbitMQHealth"))
@@ -105,9 +106,9 @@ func checkRabbitMQHealth() HealthStatus {
 	}
 
 	// Check connection readiness
-	auditTrailMqClient.m.Lock()
-	isReady := auditTrailMqClient.isReady
-	auditTrailMqClient.m.Unlock()
+	rmq.m.Lock()
+	isReady := rmq.isReady
+	rmq.m.Unlock()
 
 	if !isReady {
 		status.Status = "degraded"

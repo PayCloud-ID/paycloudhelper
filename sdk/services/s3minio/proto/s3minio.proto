@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package s3minio;
+
+option go_package = "grpc/pb;pb";
+
+// S3MinIOService provides internal gRPC capabilities that are currently kept in
+// parity tracking with docs/plans/2026-04-12-s3minio-capability-matrix.md.
+//
+// HTTP-only behaviors still outside this service definition:
+// - GET /api/v2/view (stream)
+// - POST /api/v2/download_file (stream attachment)
+// - GET /readyz (dependency readiness)
+service S3MinIOService {
+  // Upload a file (binary content in request)
+  rpc Upload(stream UploadRequest) returns (UploadResponse) {};
+
+  // Download a file by bucket/path/filename
+  rpc Download(DownloadRequest) returns (DownloadResponse);
+
+	// Generate a presigned URL (same behavior as Download URL generation)
+	rpc GeneratePresignedUrl(DownloadRequest) returns (DownloadResponse);
+
+	// Generate frontend view URL (API_URL + API_VIEW_PATH)
+	rpc GenerateViewUrl(DownloadRequest) returns (DownloadResponse);
+
+  // Health check for the gRPC service
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+message UploadRequest {
+	string filename = 1;
+	uint64 size = 2;
+	string content_type = 3;
+	bytes content = 4; // raw file bytes
+	string bucket = 5;
+	string path = 6;
+	uint32 expires = 7;
+	int64 user_id = 8;
+	int64 merchant_id = 9;
+}
+
+message UploadResponse {
+	uint32 code = 1;
+	string status = 2;
+	string message = 3;
+	UploadData data = 4;
+}
+
+message UploadData {	
+	string bucket = 1;
+	string path = 2;
+	string filename = 3;
+	string url = 4;
+	string presigned_url = 5;
+}
+
+message DownloadRequest {
+	string object = 1; // filename or url
+	string bucket = 2;
+	string path = 3;
+	int32 expires = 4;
+	int64 user_id = 5;
+	int64 merchant_id = 6;
+}
+
+message DownloadResponse {
+	uint32 code = 1;
+	string status = 2;
+	string message = 3;
+	string data = 4;
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+	string status = 1;
+}

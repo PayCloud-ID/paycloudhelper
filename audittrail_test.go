@@ -14,9 +14,9 @@ import (
 // TestLogAudittrailData_NilClient verifies no panic when auditTrailMqClient is nil.
 func TestLogAudittrailData_NilClient(t *testing.T) {
 	// Ensure client is nil
-	orig := auditTrailMqClient
-	auditTrailMqClient = nil
-	defer func() { auditTrailMqClient = orig }()
+	orig := auditTrailMqClient.Load()
+	auditTrailMqClient.Store(nil)
+	defer func() { auditTrailMqClient.Store(orig) }()
 
 	data := &RequestAndResponse{
 		Response: ResponseAudit{
@@ -62,9 +62,9 @@ func TestLogAudittrailData_ZeroStatusCode(t *testing.T) {
 
 // TestLogAudittrailData_WithKeys verifies keys are set correctly.
 func TestLogAudittrailData_WithKeys(t *testing.T) {
-	orig := auditTrailMqClient
-	auditTrailMqClient = nil
-	defer func() { auditTrailMqClient = orig }()
+	orig := auditTrailMqClient.Load()
+	auditTrailMqClient.Store(nil)
+	defer func() { auditTrailMqClient.Store(orig) }()
 
 	keys := []string{"key1", "key2"}
 	data := &RequestAndResponse{
@@ -99,9 +99,9 @@ func TestLogAudittrailProcess_EmptyParams(t *testing.T) {
 
 // TestLogAudittrailProcess_NilClient verifies no panic when client is nil.
 func TestLogAudittrailProcess_NilClient(t *testing.T) {
-	orig := auditTrailMqClient
-	auditTrailMqClient = nil
-	defer func() { auditTrailMqClient = orig }()
+	orig := auditTrailMqClient.Load()
+	auditTrailMqClient.Store(nil)
+	defer func() { auditTrailMqClient.Store(orig) }()
 
 	LogAudittrailProcess("TestFunc", "desc", "info", nil)
 	time.Sleep(50 * time.Millisecond)
@@ -113,9 +113,9 @@ func TestLogAudittrailProcess_NilClient(t *testing.T) {
 
 // TestPushMessageAudit_NilClient verifies pushMessageAudit returns when client is nil.
 func TestPushMessageAudit_NilClient(t *testing.T) {
-	orig := auditTrailMqClient
-	auditTrailMqClient = nil
-	defer func() { auditTrailMqClient = orig }()
+	orig := auditTrailMqClient.Load()
+	auditTrailMqClient.Store(nil)
+	defer func() { auditTrailMqClient.Store(orig) }()
 
 	// Reset rate limiter so the log fires
 	auditNotReadyLogMu.Lock()
@@ -133,15 +133,15 @@ func TestPushMessageAudit_NilClient(t *testing.T) {
 
 // TestPushMessageAudit_EmptyQueueName verifies pushMessageAudit returns when queue is empty.
 func TestPushMessageAudit_EmptyQueueName(t *testing.T) {
-	orig := auditTrailMqClient
+	orig := auditTrailMqClient.Load()
 	// Create a minimal client with empty queue name, marked ready.
 	client := &AmqpClient{
 		m:         &sync.Mutex{},
 		queueName: "",
 		isReady:   true,
 	}
-	auditTrailMqClient = client
-	defer func() { auditTrailMqClient = orig }()
+	auditTrailMqClient.Store(client)
+	defer func() { auditTrailMqClient.Store(orig) }()
 
 	payload := MessagePayloadAudit{
 		Id:      2,
@@ -158,8 +158,8 @@ func TestPushMessageAudit_EmptyQueueName(t *testing.T) {
 
 // TestSetUpRabbitMq_SetsClient verifies that SetUpRabbitMq returns a non-nil client.
 func TestSetUpRabbitMq_SetsClient(t *testing.T) {
-	orig := auditTrailMqClient
-	defer func() { auditTrailMqClient = orig }()
+	orig := auditTrailMqClient.Load()
+	defer func() { auditTrailMqClient.Store(orig) }()
 
 	// Use a bogus host so it won't actually connect, but client should be created.
 	client := SetUpRabbitMq("localhost", "65535", "/", "guest", "guest", "test-queue", "test-app")
@@ -172,8 +172,8 @@ func TestSetUpRabbitMq_SetsClient(t *testing.T) {
 
 // TestSetUpRabbitMq_SetsAppName verifies app name is set when empty.
 func TestSetUpRabbitMq_SetsAppName(t *testing.T) {
-	origClient := auditTrailMqClient
-	defer func() { auditTrailMqClient = origClient }()
+	origClient := auditTrailMqClient.Load()
+	defer func() { auditTrailMqClient.Store(origClient) }()
 
 	// SetUpRabbitMq internally calls phhelper.SetAppName if empty.
 	client := SetUpRabbitMq("localhost", "65535", "/", "guest", "guest", "test-queue", "my-test-app")
@@ -342,8 +342,8 @@ func TestIdUniqueness_Concurrent(t *testing.T) {
 // TestPushMessageAudit_EarlyExit_NotReady verifies pushMessageAudit returns
 // early when client exists but is not ready.
 func TestPushMessageAudit_EarlyExit_NotReady(t *testing.T) {
-	orig := auditTrailMqClient
-	defer func() { auditTrailMqClient = orig }()
+	orig := auditTrailMqClient.Load()
+	defer func() { auditTrailMqClient.Store(orig) }()
 
 	// Reset rate limiter
 	auditNotReadyLogMu.Lock()
@@ -355,7 +355,7 @@ func TestPushMessageAudit_EarlyExit_NotReady(t *testing.T) {
 		queueName: "some-queue",
 		isReady:   false,
 	}
-	auditTrailMqClient = client
+	auditTrailMqClient.Store(client)
 
 	payload := MessagePayloadAudit{
 		Id:      99,

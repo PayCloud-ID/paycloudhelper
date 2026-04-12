@@ -21,8 +21,9 @@ type ConfigError struct {
 func ValidateConfiguration() []ConfigError {
 	errors := make([]ConfigError, 0)
 
-	// Validate APP_NAME
-	if GetAppName() == "" {
+	// Validate APP_NAME (env is authoritative for this warning so Clearenv reflects missing config
+	// without racing in-memory SetAppName used elsewhere in tests).
+	if os.Getenv("APP_NAME") == "" {
 		errors = append(errors, ConfigError{
 			Field:   "APP_NAME",
 			Message: "APP_NAME environment variable not set - using empty default",
@@ -31,7 +32,10 @@ func ValidateConfiguration() []ConfigError {
 	}
 
 	// Validate APP_ENV
-	appEnv := GetAppEnv()
+	appEnv := os.Getenv("APP_ENV")
+	if appEnv == "" {
+		appEnv = GetAppEnv()
+	}
 	if appEnv == "" {
 		errors = append(errors, ConfigError{
 			Field:   "APP_ENV",

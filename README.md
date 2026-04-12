@@ -68,7 +68,16 @@ pch.ConfigureLogForwarding(pch.LogForwardConfig{
 | `phhelper` | `phhelper/` | Global state (`APP_NAME`, `APP_ENV`), JSON/string helpers |
 | `phaudittrailv0` | `phaudittrailv0/` | Legacy v0 audit trail (RabbitMQ) |
 | `phjson` | `phjson/` | Sonic JSON wrapper for high-throughput consumers |
-| `phs3minio` | `phs3minio/` | Transport-neutral DTOs + reusable upload/download workflows for S3MinIO clients |
+| `sdk/services/s3minio` | `sdk/services/s3minio/` | Service-scoped S3MinIO SDK (helper, grpc, http bridge, pb, proto, facade) |
+| `sdk/shared` | `sdk/shared/` | Shared runtime placeholders for transport, observability, and error normalization across future SDKs |
+
+### Service-Scoped SDK Foundation
+
+`sdk/services/s3minio` is the active runtime path and reference layout for future service SDKs.
+
+- All S3MinIO helper/grpc/http/pb logic now lives under `sdk/services/s3minio/*`.
+- New services should follow the same `sdk/services/<service>` structure.
+- Governance scripts under `scripts/proto/` and `scripts/check-*.sh` enforce drift and transport boundaries.
 
 ---
 
@@ -220,23 +229,23 @@ pch.ReleaseLockWithRetry(mutex, retries)
 
 ### Sentry
 
-### S3MinIO Helper (`phs3minio`)
+### S3MinIO Service SDK (`sdk/services/s3minio/helper`)
 
-`phs3minio` centralizes repeated request-building and response-validation logic that was duplicated across services.
-It is transport-neutral: services can keep their own protobuf stubs and map to/from shared DTOs.
+The service-scoped helper centralizes repeated request-building and response-validation logic.
+It is transport-neutral and used by both gRPC and HTTP bridge adapters in the same SDK namespace.
 
 ```go
-import "bitbucket.org/paycloudid/paycloudhelper/phs3minio"
+import s3helper "bitbucket.org/paycloudid/paycloudhelper/sdk/services/s3minio/helper"
 
-// Adapter implements phs3minio.Downloader by mapping to local gRPC client code.
+// Adapter implements s3helper.Downloader by mapping to local gRPC client code.
 type Adapter struct{}
 
-func (a Adapter) Download(ctx context.Context, req *phs3minio.DownloadRequest) (*phs3minio.DownloadResponse, error) {
+func (a Adapter) Download(ctx context.Context, req *s3helper.DownloadRequest) (*s3helper.DownloadResponse, error) {
     // map req to service-specific protobuf request and call downstream client
-    return &phs3minio.DownloadResponse{Code: phs3minio.CodeOK, Data: "https://..."}, nil
+    return &s3helper.DownloadResponse{Code: s3helper.CodeOK, Data: "https://..."}, nil
 }
 
-url, err := phs3minio.GetPresignedURL(ctx, Adapter{}, "file.pdf", userID, merchantID, "path", "bucket", 300)
+url, err := s3helper.GetPresignedURL(ctx, Adapter{}, "file.pdf", userID, merchantID, "path", "bucket", 300)
 ```
 
 Available helpers:
@@ -435,6 +444,32 @@ Pipeline config: `bitbucket-pipelines.yml` in the repo root.
 | **PATCH** | Bug fixes, zero behavior change |
 | **MINOR** | New backward-compatible features |
 | **MAJOR** | Breaking changes — requires coordinating all consumer updates |
+
+---
+
+## S3MinIO Shared SDK Workflow
+
+Use a single canonical provider proto and regenerate shared helper SDK packages in this repository.
+
+1. Edit canonical proto in `paycloud-be-s3minio-manager/proto/s3minio.proto`.
+2. Run `./scripts/proto/update-s3minio-proto.sh` from paycloudhelper.
+3. Run `./scripts/proto/gen-s3minio-client.sh` to regenerate and test helper packages.
+4. Optionally run `./scripts/proto/check-stub-drift.sh` in CI or before release.
+5. Release paycloudhelper and bump consumer service dependencies.
+
+Governance check for direct internal HTTP usage:
+
+```bash
+./scripts/check-no-direct-s3minio-http.sh
+```
+
+Design and rollout references are stored in `docs/sdk/`.
+
+Scaffold a future service SDK with:
+
+```bash
+make proto.service.scaffold SERVICE=clientpg
+```
 
 ---
 

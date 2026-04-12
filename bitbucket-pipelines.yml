@@ -15,6 +15,11 @@ definitions:
           - gomod
         script:
           - go version
+          - go install github.com/bufbuild/buf/cmd/buf@v1.50.0
+          - export PATH="$PATH:$(go env GOPATH)/bin"
+          - buf lint
+          - make ci.check.direct-http
+          - make ci.check.stub-drift
           - go build ./...
           - go vet ./...
           - go test ./...

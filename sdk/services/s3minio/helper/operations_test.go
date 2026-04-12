@@ -1,4 +1,4 @@
-package phs3minio
+package helper
 
 import (
 	"context"

@@ -10,7 +10,8 @@ import (
 )
 
 var (
-	auditTrailMqClient *AmqpClient
+	// auditTrailMqClient is accessed concurrently from async audit goroutines and from tests/health checks.
+	auditTrailMqClient atomic.Pointer[AmqpClient]
 
 	// auditIDCounter provides unique, collision-free IDs for audit messages.
 	auditIDCounter atomic.Int64
@@ -38,9 +39,10 @@ func SetUpRabbitMq(host, port, vhost, username, password, auditTrailQue, appName
 	}
 
 	LogI("%s init audittrail rabbitmq url=%s queue=%s", buildLogPrefix("SetUpRabbitMq"), urlStr, auditTrailQue)
-	auditTrailMqClient = NewAmqpClient(auditTrailQue, "audittrail-"+GetAppName(), uriConnection, nil)
+	c := NewAmqpClient(auditTrailQue, "audittrail-"+GetAppName(), uriConnection, nil)
+	auditTrailMqClient.Store(c)
 
-	return auditTrailMqClient
+	return c
 }
 
 // LogAudittrailProcess add audittrail process
@@ -124,22 +126,24 @@ func logAuditErrorWithSentry(msg string, err error) {
 
 // pushMessageAudit push message to audit trail queue
 func pushMessageAudit(data interface{}) {
-	// Early exit: no client or client not ready (RISK-005)
-	if auditTrailMqClient == nil {
+	// Snapshot the client for this publish so callers can safely restore globals
+	// after LogAudittrail* returns while the async goroutine is still running (race detector).
+	client := auditTrailMqClient.Load()
+	if client == nil {
 		logAuditNotReadyRateLimited("client is nil")
 		return
 	}
-	if !auditTrailMqClient.IsReady() {
+	if !client.IsReady() {
 		logAuditNotReadyRateLimited("client not ready")
 		return
 	}
-	if auditTrailMqClient.queueName == "" {
+	if client.queueName == "" {
 		err := fmt.Errorf("%s queue name is empty", buildLogPrefix("pushMessageAudit"))
 		logAuditErrorWithSentry(fmt.Sprintf("%s queue name is empty", buildLogPrefix("pushMessageAudit")), err)
 		return
 	}
 
-	auditTrailQueueName := auditTrailMqClient.queueName
+	auditTrailQueueName := client.queueName
 
 	msgBytes, err := jsonMarshalNoEsc(data)
 	if err != nil {
@@ -147,7 +151,7 @@ func pushMessageAudit(data interface{}) {
 		return
 	}
 
-	err = auditTrailMqClient.Push(msgBytes)
+	err = client.Push(msgBytes)
 	if err != nil {
 		logAuditErrorWithSentry(
 			fmt.Sprintf("%s publish message failed queue=%s err=%v", buildLogPrefix("pushMessageAudit"), auditTrailQueueName, err),
@@ -156,7 +160,7 @@ func pushMessageAudit(data interface{}) {
 		return
 	}
 
-	LogI("%s publish message async success queue=%s conn=%s", buildLogPrefix("pushMessageAudit"), auditTrailQueueName, auditTrailMqClient.connName)
+	LogI("%s publish message async success queue=%s conn=%s", buildLogPrefix("pushMessageAudit"), auditTrailQueueName, client.connName)
 }
 
 // logAuditNotReadyRateLimited logs audit client-not-ready errors at most once per auditNotReadyLogWindow

@@ -12,12 +12,12 @@ import (
 // TestLogAudittrailDataV2_FallsBack verifies V2 falls back to V1 when no publisher.
 func TestLogAudittrailDataV2_FallsBack(t *testing.T) {
 	origPub := auditPublisher
-	origClient := auditTrailMqClient
+	origClient := auditTrailMqClient.Load()
 	auditPublisher = nil
-	auditTrailMqClient = nil
+	auditTrailMqClient.Store(nil)
 	defer func() {
 		auditPublisher = origPub
-		auditTrailMqClient = origClient
+		auditTrailMqClient.Store(origClient)
 	}()
 
 	data := &RequestAndResponse{
@@ -34,12 +34,12 @@ func TestLogAudittrailDataV2_FallsBack(t *testing.T) {
 // TestLogAudittrailProcessV2_FallsBack verifies V2 falls back to V1.
 func TestLogAudittrailProcessV2_FallsBack(t *testing.T) {
 	origPub := auditPublisher
-	origClient := auditTrailMqClient
+	origClient := auditTrailMqClient.Load()
 	auditPublisher = nil
-	auditTrailMqClient = nil
+	auditTrailMqClient.Store(nil)
 	defer func() {
 		auditPublisher = origPub
-		auditTrailMqClient = origClient
+		auditTrailMqClient.Store(origClient)
 	}()
 
 	LogAudittrailProcessV2("TestFunc", "desc", "info", nil)
@@ -150,10 +150,10 @@ func TestLogAudittrailProcessV2_SubmitsToPublisher(t *testing.T) {
 // sets the package-level auditPublisher.
 func TestSetUpAuditTrailPublisher_SetsGlobal(t *testing.T) {
 	origPub := auditPublisher
-	origClient := auditTrailMqClient
+	origClient := auditTrailMqClient.Load()
 	defer func() {
 		auditPublisher = origPub
-		auditTrailMqClient = origClient
+		auditTrailMqClient.Store(origClient)
 	}()
 
 	auditPublisher = nil

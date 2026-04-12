@@ -1,4 +1,4 @@
-package phs3minio
+package helper
 
 import (
 	"io"
@@ -121,4 +121,19 @@ func BuildUploadRequestForFile(userID, merchantID int64, path, fileLocation stri
 	req.Size = uint64(sz)
 	req.ContentType = mime.TypeByExtension(filepath.Ext(fileLocation))
 	return req, nil
+}
+
+// BuildHealthRequest returns a default health probe request.
+func BuildHealthRequest() HealthRequest {
+	return HealthRequest{}
+}
+
+// BuildReadyRequest returns a default readiness probe request.
+func BuildReadyRequest() ReadyRequest {
+	return ReadyRequest{}
+}
+
+// BuildViewRequest builds a view-stream request from path.
+func BuildViewRequest(path string) ViewRequest {
+	return ViewRequest{Path: path}
 }
