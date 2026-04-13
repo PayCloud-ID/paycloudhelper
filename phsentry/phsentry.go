@@ -28,13 +28,20 @@ type SentryData struct {
 	Function string `json:"function"`
 }
 
+// SentryOptions configures the global Sentry client for InitSentry / InitSentryOptions.
+// Consumer services usually map their own environment variables into this struct; paycloudhelper
+// does not read os.Getenv for Dsn, Debug, etc. (except broader app identity via phhelper).
 type SentryOptions struct {
 	Dsn         string
 	Environment string
 	Release     string
-	Debug       bool
-	Options     *sentry.ClientOptions
-	Data        *SentryData
+	// Debug turns on verbose diagnostic logging inside sentry-go (transport, event submission).
+	// It does not control SendSentryDebug / SendToSentryDebug, which emit debug-level Sentry events.
+	// When true, SDK output is written to DebugWriter (default sentryDiagnosticWriter → info logs).
+	// Prefer false in production; use true only while troubleshooting client connectivity or delivery.
+	Debug   bool
+	Options *sentry.ClientOptions
+	Data    *SentryData
 }
 
 // sentryDiagnosticWriter bridges Sentry SDK internal debug logs to paycloudhelper log output.
@@ -199,6 +206,8 @@ func GetSentryClientOptions() *sentry.ClientOptions {
 	return sentryClientOptions
 }
 
+// InitSentryOptions merges options into the package-level sentry.ClientOptions without creating a client.
+// No-op when Dsn is empty. See SentryOptions.Debug for the meaning of the Debug field (SDK diagnostics).
 func InitSentryOptions(options SentryOptions) {
 	if options.Dsn == "" {
 		return
@@ -232,6 +241,8 @@ func InitSentryOptions(options SentryOptions) {
 	}
 }
 
+// InitSentry creates the global Sentry client. Returns nil when Dsn is empty.
+// For SDK verbose logging, set options.Debug (often from a service-level SENTRY_DEBUG env); see SentryOptions.
 func InitSentry(options SentryOptions) *sentry.Client {
 	if options.Dsn == "" {
 		return nil
@@ -328,6 +339,8 @@ func SendToSentryWarning(err error, service, module, function string) {
 	)
 }
 
+// SendToSentryDebug captures an error as a Sentry event at LevelDebug (a product event).
+// This is unrelated to SentryOptions.Debug, which only enables SDK transport/client log output.
 func SendToSentryDebug(err error, service, module, function string) {
 	if err == nil {
 		return
@@ -427,6 +440,7 @@ func SendSentryWarning(err error, args ...string) {
 	sendToSentry(err, "warning", args...)
 }
 
+// SendSentryDebug captures err at Sentry LevelDebug. Not the same as SentryOptions.Debug (SDK diagnostics).
 func SendSentryDebug(err error, args ...string) {
 	if err == nil {
 		return

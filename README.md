@@ -229,6 +229,28 @@ pch.ReleaseLockWithRetry(mutex, retries)
 
 ### Sentry
 
+Initialize Sentry after app identity is set (`InitializeApp()` or `SetAppName` / `SetAppEnv`). A non-empty `Dsn` is required; an empty DSN skips initialization.
+
+**`Debug` and `SENTRY_DEBUG`:** The library does **not** read `SENTRY_DEBUG` (or any env var) for this flag. Consumer services map their own env (for example `SENTRY_DEBUG=true`) to `SentryOptions.Debug` when calling `InitSentry`. When `Debug` is `true`, the sentry-go SDK prints **verbose internal diagnostics** (transport, delivery, client behavior). In paycloudhelper those lines go through the default `DebugWriter` and show up as **info-level application logs** (normalized with a `[pchelper.Sentry]` prefix). That is **not** the same as `SendSentryDebug` / `SendToSentryDebug`, which submit **debug-level events** to the Sentry product.
+
+| Deploy context | Typical `Debug` value |
+|----------------|----------------------|
+| Local / active troubleshooting | `true` only while fixing DSN, network, or “events not arriving” |
+| Staging | Usually `false`; `true` briefly if you are debugging the SDK |
+| Production | `false` (less noise and log volume) |
+
+```go
+pch.InitSentry(pch.SentryOptions{
+    Dsn:         os.Getenv("SENTRY_DSN"),
+    Environment: os.Getenv("APP_ENV"),
+    Release:     os.Getenv("SENTRY_RELEASE"),
+    Debug:       os.Getenv("SENTRY_DEBUG") == "true",
+})
+pch.SendSentryError(err)
+pch.SendSentryMessage("something happened")
+pch.FlushSentry(2 * time.Second) // before process exit
+```
+
 ### S3MinIO Service SDK (`sdk/services/s3minio/helper`)
 
 The service-scoped helper centralizes repeated request-building and response-validation logic.
@@ -256,17 +278,6 @@ Available helpers:
 - `UploadByMultipart`
 - `UploadByFile`
 - `UploadByRequest`
-
-```go
-pch.InitSentry(pch.SentryOptions{
-    Dsn:         os.Getenv("SENTRY_DSN"),
-    Environment: os.Getenv("APP_ENV"),
-    Release:     "v1.7.0",
-})
-pch.SendSentryError(err)
-pch.SendSentryMessage("something happened")
-pch.FlushSentry(2 * time.Second)  // call before process exit
-```
 
 ### Audit Trail
 
@@ -323,7 +334,8 @@ All configuration is loaded from environment variables in `InitializeApp()`:
 | `REDIS_HOST` | For Redis | `""` | Redis server |
 | `REDIS_PORT` | For Redis | `6379` | Redis port |
 | `REDIS_PASSWORD` | No | `""` | Redis auth |
-| `SENTRY_DSN` | For Sentry | `""` | Sentry project DSN |
+| `SENTRY_DSN` | For Sentry | `""` | Sentry project DSN (validated in `InitializeApp`; empty disables Sentry) |
+| `SENTRY_DEBUG` | No | — | **Not read by this library.** Services pass `Debug: os.Getenv("SENTRY_DEBUG") == "true"` into `InitSentry` if desired; see [Sentry](#sentry). |
 | `LOG_FORWARD_FATAL` | No | `true` | Forward Fatal → Sentry |
 | `LOG_FORWARD_ERROR` | No | `true` | Forward Error → Sentry |
 | `LOG_FORWARD_WARN` | No | `false` | Forward Warn → Sentry |

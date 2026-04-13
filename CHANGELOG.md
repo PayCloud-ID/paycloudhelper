@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Documentation**: README Sentry section (including `SENTRY_DEBUG` / `SentryOptions.Debug` vs `SendSentryDebug`), configuration table note, and godoc on `SentryOptions`, `InitSentry`, `InitSentryOptions`, and debug capture helpers.
+
 - **Service-scoped SDK foundation** (`sdk/services/s3minio/`, `sdk/shared/`): Added Phase 1 service SDK layout for S3MinIO with helper/grpc/http/pb/proto/facade packages and shared runtime placeholder packages for transport, observability, and error normalization.
 - **Proto governance baseline** (`buf.yaml`, `buf.gen.yaml`, `Makefile`): Added Buf configuration and Makefile targets for S3MinIO proto lint/breaking workflows plus service-scaffold command surface.
 - **SDK scaffold pattern** (`scripts/proto/new-service-scaffold.sh`, `docs/sdk/scaffold-pattern.md`): Added generator-backed scaffold pattern for onboarding future service SDKs under `sdk/services/<service>`.

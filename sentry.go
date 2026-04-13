@@ -24,10 +24,14 @@ func GetSentryClientOptions() *sentry.ClientOptions {
 	return phsentry.GetSentryClientOptions()
 }
 
+// InitSentryOptions prepares merged Sentry client options without instantiating the client.
+// See phsentry.SentryOptions (including Debug / service-level SENTRY_DEBUG wiring).
 func InitSentryOptions(options phsentry.SentryOptions) {
 	phsentry.InitSentryOptions(options)
 }
 
+// InitSentry initializes the global Sentry client from options; nil when Dsn is empty.
+// Debug enables sentry-go SDK diagnostic logs (not the same as SendSentryDebug events).
 func InitSentry(options phsentry.SentryOptions) *sentry.Client {
 	return phsentry.InitSentry(options)
 }
