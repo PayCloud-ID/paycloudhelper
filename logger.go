@@ -1,6 +1,8 @@
 package paycloudhelper
 
 import (
+	"os"
+	"strconv"
 	"time"
 
 	"bitbucket.org/paycloudid/paycloudhelper/phlogger"
@@ -213,4 +215,59 @@ func ConfigureLogForwarding(cfg phlogger.LogForwardConfig) {
 // See phlogger.LogForwardConfigFromEnv for variable names and defaults.
 func LogForwardConfigFromEnv() phlogger.LogForwardConfig {
 	return phlogger.LogForwardConfigFromEnv()
+}
+
+// ConfigureSentryLogging enables or disables forwarding of all log levels to Sentry.
+// When enabled (true), all logs emitted via LogI, LogE, LogW, LogD, LogF are forwarded
+// to Sentry as structured events and breadcrumbs.
+//
+// Call once at startup AFTER InitSentry() has completed.
+// This is the recommended simpler API compared to ConfigureLogForwarding for basic setup.
+//
+// Example (startup):
+//
+//	pch.InitSentry(pch.SentryOptions{...})
+//	pch.ConfigureSentryLogging(true)  // enable all log levels to Sentry
+//	pch.LogE("[Main] startup error: %v", err)  // forwarded to Sentry
+//
+// To enable via environment variable (default):
+//
+//	// In your service
+//	enableSentryLogging := os.Getenv("SENTRY_LOGGING") == "true"
+//	pch.ConfigureSentryLogging(enableSentryLogging)
+func ConfigureSentryLogging(enable bool) {
+	if enable {
+		phsentry.RegisterSentryLogHook()
+	}
+}
+
+// SentryLoggingFromEnv loads the SENTRY_LOGGING environment variable and returns its boolean value.
+// Parses common boolean formats: "1", "t", "T", "true", "TRUE", "True", "0", "f", "F", "false", "FALSE", "False".
+// Returns false for invalid or unset values (default behavior).
+//
+// Call once at startup AFTER InitSentry() has completed, then pass result to ConfigureSentryLogging.
+// This is the recommended pattern for environment-driven sentry logging control.
+//
+// Example (typical service startup):
+//
+//	pch.InitSentry(pch.SentryOptions{Dsn: os.Getenv("SENTRY_DSN"), ...})
+//	pch.ConfigureSentryLogging(pch.SentryLoggingFromEnv())
+//
+// Environment variable examples:
+//
+//	SENTRY_LOGGING=true   → enable
+//	SENTRY_LOGGING=1      → enable
+//	SENTRY_LOGGING=false  → disable (default)
+//	SENTRY_LOGGING=0      → disable (default)
+//	(unset)               → disable (default)
+func SentryLoggingFromEnv() bool {
+	val := os.Getenv("SENTRY_LOGGING")
+	if val == "" {
+		return false // unset defaults to false
+	}
+	parsed, err := strconv.ParseBool(val)
+	if err != nil {
+		return false // invalid values default to false
+	}
+	return parsed
 }

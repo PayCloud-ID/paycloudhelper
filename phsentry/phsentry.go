@@ -224,6 +224,7 @@ func InitSentryOptions(options SentryOptions) {
 		AttachStacktrace: false,
 		TracesSampleRate: 1.0,
 		DebugWriter:      sentryDiagnosticWriter{},
+		EnableLogs:       true, // Enable structured logging capture in Sentry SDK v0.33.0+
 	}
 
 	//merge default options with input

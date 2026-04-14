@@ -184,26 +184,64 @@ if limiter.Allow("db.timeout") {
 
 Each key gets an independent token bucket. Tokens refill at the configured rate.
 
-#### Log Forwarding to Sentry
+#### Sentry Structured Logging
+
+Paycloudhelper integrates **structured logging with Sentry** (SDK v0.33.0+) to forward all logs to Sentry for centralized error tracking and observability.
+
+**Simple Setup (Recommended):**
 
 ```go
-// Call once at startup — configure which levels forward to Sentry
-pch.ConfigureLogForwarding(pch.LogForwardConfig{
-    ForwardFatal: true,  // default: true when Sentry enabled
-    ForwardError: false, // default: false
-    ForwardWarn:  false, // default: false
-    // OR load from env: pch.LogForwardConfigFromEnv()
+// 1. Initialize Sentry
+pch.InitSentry(pch.SentryOptions{
+    Dsn:         os.Getenv("SENTRY_DSN"),
+    Environment: os.Getenv("APP_ENV"),
+    Release:     os.Getenv("SENTRY_RELEASE"),
 })
+
+// 2. Enable structured logging via environment variable (one-liner)
+pch.ConfigureSentryLogging(pch.SentryLoggingFromEnv())
+
+// 3. Logs are now automatically forwarded to Sentry
+pch.LogE("[Main.start] error: %v", err)     // → Sentry exception event
+pch.LogI("[Main.start] listening on :8080") // → Sentry breadcrumb
 ```
 
-Environment variables (evaluated by `LogForwardConfigFromEnv()`):
+**Environment Variables:**
 
 | Env Var | Default | Effect |
 |---------|---------|--------|
-| `LOG_FORWARD_FATAL` | `true` | Forward Fatal logs to Sentry |
-| `LOG_FORWARD_ERROR` | `true` | Forward Error logs to Sentry |
-| `LOG_FORWARD_WARN` | `false` | Forward Warn logs to Sentry |
-| `LOG_FORWARD_INFO` | `false` | Forward Info logs to Sentry |
+| `SENTRY_LOGGING` | `false` | Enable/disable structured logging to Sentry. Accepts: `true`, `1`, `t`, `T`, `false`, `0`, `f`, `F` (case-insensitive). Invalid values default to false. |
+| `SENTRY_DSN` | empty | Sentry ingestion endpoint |
+| `SENTRY_RELEASE` | empty | Application version |
+| `SENTRY_DEBUG` | `false` | Verbose SDK diagnostics (local/staging only) |
+
+**How It Works:**
+
+- All logs via `LogI()`, `LogE()`, `LogW()`, `LogD()`, `LogF()` are forwarded to Sentry
+- Error/fatal logs → exception events (appear as issues in Sentry)
+- Info/warn/debug logs → breadcrumbs (appear as context in related issues)
+- `[FunctionName]` prefix is extracted for issue grouping
+- Thread-safe: hooks are registered synchronously once
+
+**Advanced: Granular Control**
+
+For more granular per-level configuration (legacy):
+
+```go
+pch.ConfigureLogForwarding(pch.LogForwardConfig{
+    ForwardFatal: true,  // default: true
+    ForwardError: true,  // default: false  
+    ForwardWarn:  false, // default: false
+    ForwardInfo: false,  // default: false
+    // OR autoload: pch.LogForwardConfigFromEnv()
+})
+```
+
+**Before Process Exit:**
+
+```go
+pch.FlushSentry(2 * time.Second) // Ensure events are delivered
+```
 
 ### Response
 
@@ -227,11 +265,13 @@ pch.AcquireLockWithRetry(key, ttl, retries, delay)
 pch.ReleaseLockWithRetry(mutex, retries)
 ```
 
-### Sentry
+### Sentry Error Tracking
 
-Initialize Sentry after app identity is set (`InitializeApp()` or `SetAppName` / `SetAppEnv`). A non-empty `Dsn` is required; an empty DSN skips initialization.
+Initialize Sentry for error tracking. A non-empty `Dsn` is required; an empty DSN skips initialization.
 
-**`Debug` and `SENTRY_DEBUG`:** The library does **not** read `SENTRY_DEBUG` (or any env var) for this flag. Consumer services map their own env (for example `SENTRY_DEBUG=true`) to `SentryOptions.Debug` when calling `InitSentry`. When `Debug` is `true`, the sentry-go SDK prints **verbose internal diagnostics** (transport, delivery, client behavior). In paycloudhelper those lines go through the default `DebugWriter` and show up as **info-level application logs** (normalized with a `[pchelper.Sentry]` prefix). That is **not** the same as `SendSentryDebug` / `SendToSentryDebug`, which submit **debug-level events** to the Sentry product.
+**For structured logging integration**, see [Sentry Structured Logging](#sentry-structured-logging) above.
+
+**`Debug` and `SENTRY_DEBUG`:** This only controls SDK internal diagnostics verbosity, not structured logging. When `Debug` is `true`, the sentry-go SDK prints verbose diagnostics to the configured `DebugWriter` (default: application logs with `[pchelper.Sentry]` prefix).
 
 | Deploy context | Typical `Debug` value |
 |----------------|----------------------|
@@ -335,11 +375,12 @@ All configuration is loaded from environment variables in `InitializeApp()`:
 | `REDIS_PORT` | For Redis | `6379` | Redis port |
 | `REDIS_PASSWORD` | No | `""` | Redis auth |
 | `SENTRY_DSN` | For Sentry | `""` | Sentry project DSN (validated in `InitializeApp`; empty disables Sentry) |
-| `SENTRY_DEBUG` | No | — | **Not read by this library.** Services pass `Debug: os.Getenv("SENTRY_DEBUG") == "true"` into `InitSentry` if desired; see [Sentry](#sentry). |
-| `LOG_FORWARD_FATAL` | No | `true` | Forward Fatal → Sentry |
-| `LOG_FORWARD_ERROR` | No | `true` | Forward Error → Sentry |
-| `LOG_FORWARD_WARN` | No | `false` | Forward Warn → Sentry |
-| `LOG_FORWARD_INFO` | No | `false` | Forward Info → Sentry |
+| `SENTRY_LOGGING` | No | `false` | Enable structured logging to Sentry (all log levels) |
+| `SENTRY_DEBUG` | No | `false` | **Not read by this library.** Services pass `Debug: os.Getenv("SENTRY_DEBUG") == "true"` into `InitSentry` if desired; controls SDK diagnostics verbosity. |
+| `LOG_FORWARD_FATAL` | No | `true` | Forward Fatal → Sentry (legacy; use `SENTRY_LOGGING` instead) |
+| `LOG_FORWARD_ERROR` | No | `true` | Forward Error → Sentry (legacy; use `SENTRY_LOGGING` instead) |
+| `LOG_FORWARD_WARN` | No | `false` | Forward Warn → Sentry (legacy; use `SENTRY_LOGGING` instead) |
+| `LOG_FORWARD_INFO` | No | `false` | Forward Info → Sentry (legacy; use `SENTRY_LOGGING` instead) |
 | `TRANSACTION_REDIS_LOCK_TIMEOUT` | No | `2000` (ms) | Distributed lock TTL |
 | `TRANSACTION_REDIS_BACKOFF` | No | `10` (ms) | Lock retry backoff |
 

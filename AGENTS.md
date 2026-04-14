@@ -187,6 +187,62 @@ e.Use(VerifIdemKey)     // Deduplicates by Idempotency-Key + body hash
 e.Use(RevokeToken)      // Validates JWT + revocation check in Redis
 ```
 
+### Sentry Structured Logging (`phsentry/log_hook.go`)
+
+Paycloudhelper integrates **structured logging with Sentry** (SDK v0.33.0+) to forward all logs to Sentry for centralized error tracking and observability.
+
+**Architecture:**
+- Hook-based integration: All logs via `LogI()`, `LogE()`, `LogW()`, `LogD()`, `LogF()` are forwarded to Sentry
+- Error/fatal logs become exception events (grouped by `[FunctionName]` prefix)
+- Info/warn/debug logs become breadcrumbs (contextual trace data)
+- Completely opt-in via `ConfigureSentryLogging(enable bool)`
+
+**Setup (consumer service):**
+
+```go
+import pchelper "bitbucket.org/paycloudid/paycloudhelper"
+
+// 1. Initialize Sentry (early in startup)
+pchelper.InitSentry(pchelper.SentryOptions{
+    Dsn:         os.Getenv("SENTRY_DSN"),
+    Environment: os.Getenv("APP_ENV"),
+    Release:     version,
+})
+
+// 2. Enable structured logging to Sentry via environment variable (recommended)
+pchelper.ConfigureSentryLogging(pchelper.SentryLoggingFromEnv())
+
+// 3. Emit logs (automatically forwarded to Sentry when enabled)
+pchelper.LogE("[Server.start] failed to bind port err=%v", err)   // → Sentry exception
+pchelper.LogI("[Server.start] listening on port=%s", port)        // → Sentry breadcrumb
+```
+
+**Environment variable:**
+
+```bash
+SENTRY_LOGGING=true   # enable structured logging (also accepts 1, t, T)
+SENTRY_LOGGING=false  # disable (also accepts 0, f, F - default)
+# (unset or invalid)   → disable (default)
+
+**How it works:**
+- Every log call triggers registered hooks after the message is formatted
+- Hook functions receive `(level string, message string)` 
+- `ReceiveLog()` processes the message and decides whether to send an exception event or breadcrumb
+- Error/fatal logs → exception event (appears as issue in Sentry dashboard)
+- Info/warn/debug logs → breadcrumb (appears as context in related issues)
+- `[FunctionName]` prefix in brackets is extracted for grouping (e.g., `[InitRedis]` → issue title starts with `[InitRedis]`)
+
+**Integration with existing log forwarding:**
+- `ConfigureSentryLogging()` is the new recommended entry point
+- Legacy `ConfigureLogForwarding()` still works for granular per-level control
+- Both can coexist; hooks are cumulative
+
+**Testing / debugging:**
+- Set `SENTRY_LOGGING=true` to enable
+- Logs are sent synchronously to Sentry; calls block briefly
+- Use `pchelper.FlushSentry(2 * time.Second)` before process exit to ensure delivery
+- Check Sentry dashboard under your DSN project for captured events/breadcrumbs
+
 ## Versioning
 
 | Bump | When | Examples |

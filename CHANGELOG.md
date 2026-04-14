@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Sentry structured logging integration**: Added `ConfigureSentryLogging(enable bool)` as a simple opt-in API to forward all `phlogger` levels (`debug`, `info`, `warn`, `error`, `fatal`) to Sentry via log hooks. Recommended runtime gate is `SENTRY_LOGGING` (`false` by default in consumer services).
+- **`SentryLoggingFromEnv()` helper**: New convenience function to load SENTRY_LOGGING environment variable and configure structured logging in one call: `pch.ConfigureSentryLogging(pch.SentryLoggingFromEnv())`.
+- **`phsentry/log_hook.go`**: Added `RegisterSentryLogHook()` with `sync.Once` to ensure one-time hook wiring and avoid duplicate forwarding registrations.
+- **Sentry SDK structured logs enablement**: `InitSentryOptions` now sets `sentry.ClientOptions.EnableLogs = true` (SDK v0.33.0+ compatible) so log ingestion is available when forwarding is enabled.
+- **Documentation refresh**: Added Sentry structured logging usage and environment guidance in `README.md` and `AGENTS.md`, including default-off behavior, `SENTRY_LOGGING` workflow, and relationship with legacy granular `ConfigureLogForwarding` options.
+
 - **Documentation**: README Sentry section (including `SENTRY_DEBUG` / `SentryOptions.Debug` vs `SendSentryDebug`), configuration table note, and godoc on `SentryOptions`, `InitSentry`, `InitSentryOptions`, and debug capture helpers.
 
 - **Service-scoped SDK foundation** (`sdk/services/s3minio/`, `sdk/shared/`): Added Phase 1 service SDK layout for S3MinIO with helper/grpc/http/pb/proto/facade packages and shared runtime placeholder packages for transport, observability, and error normalization.
@@ -44,6 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `docs/sdk/s3minio-probe-observe-wiring.md`: Example wiring of `helper.ProbeObserveFunc` from a consumer `main` (after logger init).
 
 ### Changed
+
+- **Sentry section naming/clarity**: README now distinguishes `Sentry Error Tracking` from `Sentry Structured Logging`, with explicit guidance that `SENTRY_DEBUG` affects SDK diagnostics only (not log forwarding) and `SENTRY_LOGGING` controls structured log forwarding.
 
 - **S3MinIO SDK runtime ownership**: `sdk/services/s3minio/{helper,grpc,http,pb}` now contains direct implementations and tests; runtime no longer depends on legacy package forwarding.
 - **Proto tooling paths**: S3MinIO proto update/generation/drift scripts now target only `sdk/services/s3minio/*` paths.

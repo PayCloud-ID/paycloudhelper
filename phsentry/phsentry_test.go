@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"bitbucket.org/paycloudid/paycloudhelper/phlogger"
 	"github.com/getsentry/sentry-go"
 )
 
@@ -74,6 +76,35 @@ func TestNewSentryData_HandlesNilInput(t *testing.T) {
 func TestFlushSentry_NilClientNoPanic(t *testing.T) {
 	sentryClient = nil
 	FlushSentry(1 * time.Second)
+}
+
+func TestInitSentryOptions_EnableLogsDefaultTrue(t *testing.T) {
+	prev := sentryClientOptions
+	defer func() { sentryClientOptions = prev }()
+
+	InitSentryOptions(SentryOptions{Dsn: "https://examplePublicKey@o0.ingest.sentry.io/0"})
+	if sentryClientOptions == nil {
+		t.Fatal("InitSentryOptions should initialize sentryClientOptions when DSN is provided")
+	}
+	if !sentryClientOptions.EnableLogs {
+		t.Fatal("InitSentryOptions should enable structured logs by default")
+	}
+}
+
+func TestRegisterSentryLogHook_IdempotentNoPanic(t *testing.T) {
+	phlogger.ClearLogHooks()
+	defer phlogger.ClearLogHooks()
+
+	prevOnce := sentryLogHookOnce
+	defer func() { sentryLogHookOnce = prevOnce }()
+	sentryLogHookOnce = sync.Once{}
+
+	RegisterSentryLogHook()
+	RegisterSentryLogHook()
+
+	// Should not panic when hooks are active and no client is initialized.
+	sentryClient = nil
+	phlogger.LogI("[TestRegisterSentryLogHook] info")
 }
 
 func TestReceiveLog_NilClientNoPanic(t *testing.T) {

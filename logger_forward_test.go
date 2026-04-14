@@ -47,3 +47,48 @@ func TestLogForwardConfigFromEnv_ReturnsConfig(t *testing.T) {
 		t.Error("ForwardError should default to true")
 	}
 }
+
+func TestSentryLoggingFromEnv_DefaultFalse(t *testing.T) {
+	t.Setenv("SENTRY_LOGGING", "")
+	if SentryLoggingFromEnv() {
+		t.Error("SentryLoggingFromEnv() should default to false when unset")
+	}
+}
+
+func TestSentryLoggingFromEnv_AcceptsMultipleBooleanFormats(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    string
+		expected bool
+	}{
+		// True values
+		{"true lowercase", "true", true},
+		{"true uppercase", "TRUE", true},
+		{"true mixed case", "True", true},
+		{"true short", "t", true},
+		{"true short T", "T", true},
+		{"one", "1", true},
+		// False values
+		{"false lowercase", "false", false},
+		{"false uppercase", "FALSE", false},
+		{"false mixed case", "False", false},
+		{"false short", "f", false},
+		{"false short F", "F", false},
+		{"zero", "0", false},
+		// Invalid values default to false
+		{"yes", "yes", false},
+		{"no", "no", false},
+		{"random string", "random", false},
+		{"empty", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("SENTRY_LOGGING", tt.value)
+			got := SentryLoggingFromEnv()
+			if got != tt.expected {
+				t.Errorf("SentryLoggingFromEnv() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
