@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [v1.8.0-beta.2] - 2024-06-20
 
 ### Added
 
@@ -88,11 +88,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.8.0] and earlier
+## [1.7.1-beta.1] and earlier
 
 History before this changelog was introduced. See git tags and release notes for older versions.
 
 Retracted versions (do not use): v1.6.3, v1.6.0, v1.5.2 — see `go.mod` retract block.
 
-[Unreleased]: https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.8.0..HEAD
-[1.8.0]: https://bitbucket.org/paycloudid/paycloudhelper/src/v1.8.0
+[v1.8.0-beta.2]: https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.7.1-beta.1..v1.8.0-beta.2
+[1.7.1-beta.1]: https://bitbucket.org/paycloudid/paycloudhelper/src/v1.7.1-beta.1
