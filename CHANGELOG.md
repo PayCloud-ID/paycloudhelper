@@ -68,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **S3MinIO gRPC marshaling compatibility** (`sdk/services/s3minio/pb/client.go`): Replaced direct `grpc.Invoke` calls that sent compatibility structs (non-protobuf messages) with an internal bridge to generated wire protobuf stubs (`sdk/services/s3minio/pb/wirepb/*`). This fixes runtime errors like `grpc: error while marshaling: proto: failed to marshal, message is *pb.DownloadRequest, want proto.Message` in consumers resolving profile images via `GetMinIOPresignedUrl`.
 - **`go test -race ./...` (root package)**: Audittrail tests vs. async `pushMessageAudit`, atomic AMQP client pointer, and mutex-protected app name/env removed data races; `TestValidateConfiguration` uses `t.Setenv` per subtest instead of `os.Clearenv()`.
 - **Audit trail — `Push()` infinite retry (RISK-001)**: `AmqpClient.Push()` now retries at most `PushMaxRetries` (default 3) times with a total timeout of `PushTimeout` (default 15s). Previously it retried forever with 5s delays, causing goroutine leaks under RabbitMQ degradation.
 - **Audit trail — ContentType (RISK-006)**: `UnsafePush` now publishes with `ContentType: "application/json"` instead of `"text/plain"`. Non-breaking — consumers don't filter on content type.

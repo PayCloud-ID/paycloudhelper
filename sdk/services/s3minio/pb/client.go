@@ -4,6 +4,7 @@ package pb
 import (
 	"context"
 
+	wirepb "bitbucket.org/paycloudid/paycloudhelper/sdk/services/s3minio/pb/wirepb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 )
@@ -68,55 +69,93 @@ type S3MinIOServiceClient interface {
 }
 
 type s3MinIOServiceClient struct {
-	cc grpc.ClientConnInterface
+	wire wirepb.S3MinIOServiceClient
 }
 
 func NewS3MinIOServiceClient(cc grpc.ClientConnInterface) S3MinIOServiceClient {
-	return &s3MinIOServiceClient{cc: cc}
+	return &s3MinIOServiceClient{wire: wirepb.NewS3MinIOServiceClient(cc)}
 }
 
 func (c *s3MinIOServiceClient) Upload(ctx context.Context, opts ...grpc.CallOption) (S3MinIOService_UploadClient, error) {
-	stream, err := c.cc.NewStream(ctx, &S3MinIOService_ServiceDesc.Streams[0], ServiceName+"/Upload", opts...)
+	stream, err := c.wire.Upload(ctx, opts...)
 	if err != nil {
 		return nil, err
 	}
-	return &s3MinIOServiceUploadClient{ClientStream: stream}, nil
+
+	return &s3MinIOServiceUploadClient{S3MinIOService_UploadClient: stream}, nil
 }
 
 func (c *s3MinIOServiceClient) Download(ctx context.Context, in *DownloadRequest, opts ...grpc.CallOption) (*DownloadResponse, error) {
-	out := new(DownloadResponse)
-	err := c.cc.Invoke(ctx, ServiceName+"/Download", in, out, opts...)
+	out, err := c.wire.Download(ctx, &wirepb.DownloadRequest{
+		Object:     in.Object,
+		Bucket:     in.Bucket,
+		Path:       in.Path,
+		Expires:    in.Expires,
+		UserId:     in.UserID,
+		MerchantId: in.MerchantID,
+	}, opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+
+	return &DownloadResponse{
+		Code:    out.Code,
+		Status:  out.Status,
+		Message: out.Message,
+		Data:    out.Data,
+	}, nil
 }
 
 func (c *s3MinIOServiceClient) GeneratePresignedUrl(ctx context.Context, in *DownloadRequest, opts ...grpc.CallOption) (*DownloadResponse, error) {
-	out := new(DownloadResponse)
-	err := c.cc.Invoke(ctx, ServiceName+"/GeneratePresignedUrl", in, out, opts...)
+	out, err := c.wire.GeneratePresignedUrl(ctx, &wirepb.DownloadRequest{
+		Object:     in.Object,
+		Bucket:     in.Bucket,
+		Path:       in.Path,
+		Expires:    in.Expires,
+		UserId:     in.UserID,
+		MerchantId: in.MerchantID,
+	}, opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+
+	return &DownloadResponse{
+		Code:    out.Code,
+		Status:  out.Status,
+		Message: out.Message,
+		Data:    out.Data,
+	}, nil
 }
 
 func (c *s3MinIOServiceClient) GenerateViewUrl(ctx context.Context, in *DownloadRequest, opts ...grpc.CallOption) (*DownloadResponse, error) {
-	out := new(DownloadResponse)
-	err := c.cc.Invoke(ctx, ServiceName+"/GenerateViewUrl", in, out, opts...)
+	out, err := c.wire.GenerateViewUrl(ctx, &wirepb.DownloadRequest{
+		Object:     in.Object,
+		Bucket:     in.Bucket,
+		Path:       in.Path,
+		Expires:    in.Expires,
+		UserId:     in.UserID,
+		MerchantId: in.MerchantID,
+	}, opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+
+	return &DownloadResponse{
+		Code:    out.Code,
+		Status:  out.Status,
+		Message: out.Message,
+		Data:    out.Data,
+	}, nil
 }
 
 func (c *s3MinIOServiceClient) Health(ctx context.Context, in *HealthRequest, opts ...grpc.CallOption) (*HealthResponse, error) {
-	out := new(HealthResponse)
-	err := c.cc.Invoke(ctx, ServiceName+"/Health", in, out, opts...)
+	_ = in
+	out, err := c.wire.Health(ctx, &wirepb.HealthRequest{}, opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+
+	return &HealthResponse{Status: out.Status}, nil
 }
 
 type S3MinIOService_UploadClient interface {
@@ -126,22 +165,45 @@ type S3MinIOService_UploadClient interface {
 }
 
 type s3MinIOServiceUploadClient struct {
-	grpc.ClientStream
+	wirepb.S3MinIOService_UploadClient
 }
 
 func (x *s3MinIOServiceUploadClient) Send(m *UploadRequest) error {
-	return x.ClientStream.SendMsg(m)
+	return x.S3MinIOService_UploadClient.Send(&wirepb.UploadRequest{
+		Filename:    m.Filename,
+		Size:        m.Size,
+		ContentType: m.ContentType,
+		Content:     m.Content,
+		Bucket:      m.Bucket,
+		Path:        m.Path,
+		Expires:     m.Expires,
+		UserId:      m.UserID,
+		MerchantId:  m.MerchantID,
+	})
 }
 
 func (x *s3MinIOServiceUploadClient) CloseAndRecv() (*UploadResponse, error) {
-	if err := x.ClientStream.CloseSend(); err != nil {
+	m, err := x.S3MinIOService_UploadClient.CloseAndRecv()
+	if err != nil {
 		return nil, err
 	}
-	m := new(UploadResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
+
+	out := &UploadResponse{
+		Code:    m.Code,
+		Status:  m.Status,
+		Message: m.Message,
 	}
-	return m, nil
+	if m.Data != nil {
+		out.Data = &UploadData{
+			Bucket:       m.Data.Bucket,
+			Path:         m.Data.Path,
+			Filename:     m.Data.Filename,
+			URL:          m.Data.Url,
+			PresignedURL: m.Data.PresignedUrl,
+		}
+	}
+
+	return out, nil
 }
 
 var S3MinIOService_ServiceDesc = grpc.ServiceDesc{
