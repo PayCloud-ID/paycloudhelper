@@ -6,8 +6,8 @@ Keep one canonical S3MinIO protobuf contract in the provider repo and regenerate
 
 ## Canonical Source
 
-- Provider canonical proto: /Users/natan/go/src/paycloud-be-s3minio-manager/proto/s3minio.proto
-- Shared service-sdk snapshot: /Users/natan/Projects/_htdocs_pc/paycloudhelper/sdk/services/s3minio/proto/s3minio.proto
+- Provider canonical proto: ./paycloud-be-s3minio-manager/proto/s3minio.proto
+- Shared service-sdk snapshot: ./paycloudhelper/sdk/services/s3minio/proto/s3minio.proto
 
 ## Workflow
 
@@ -21,7 +21,7 @@ Keep one canonical S3MinIO protobuf contract in the provider repo and regenerate
 ## Commands
 
 ```bash
-cd /Users/natan/Projects/_htdocs_pc/paycloudhelper
+cd ./paycloudhelper
 ./scripts/proto/update-s3minio-proto.sh
 ./scripts/proto/gen-s3minio-client.sh
 ```

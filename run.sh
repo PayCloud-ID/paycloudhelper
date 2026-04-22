@@ -1,5 +1,28 @@
 #!/usr/bin/env bash
-# run.sh — library module (no main): runs tests with race detector.
+# run.sh
+#
+# Purpose:
+# - Convenience entrypoint for this library repository to run unit tests with race detection.
+# - Provides an optional debug mode that enables Go scheduler/debug behavior flags.
+#
+# Usage:
+# - ./run.sh [--debug] [--help]
+#
+# Options:
+# - --debug    Sets GODEBUG=asyncpreemptoff=0 before running tests.
+# - -h, --help Show usage.
+#
+# What It Reads:
+# - Current repository Go module/packages via go test.
+# - CLI arguments.
+#
+# What It Affects / Does:
+# - Executes: go test -race ./...
+# - Replaces current shell process with go test via exec.
+# - In debug mode, exports GODEBUG for this process.
+#
+# Exit Behavior:
+# - Non-zero when tests fail or invalid arguments are supplied.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"

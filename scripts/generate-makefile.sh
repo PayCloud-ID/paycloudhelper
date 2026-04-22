@@ -1,7 +1,34 @@
 #!/usr/bin/env bash
-# generate-makefile.sh — Auto-detect Go service or library layout and emit Makefile + run.sh.
-# Usage: ./scripts/generate-makefile.sh [--service-path DIR] [--dry-run]
-# PayCloud pattern: help target, race-aware local dev, optional proto + cicd delegation.
+# generate-makefile.sh
+#
+# Purpose:
+# - Auto-detect a Go module layout (binary service vs shared library) and generate
+#   standardized Makefile and run.sh files.
+# - Keep local dev and CI targets consistent with PayCloud conventions.
+#
+# Usage:
+# - ./scripts/generate-makefile.sh [--service-path DIR] [--dry-run]
+#
+# Options:
+# - --service-path DIR   Target module directory (defaults to repository root).
+# - --dry-run            Print generated Makefile and run.sh without writing files.
+# - -h, --help           Show usage.
+#
+# What It Reads:
+# - go.mod (required): detects module path and driver dependencies.
+# - Candidate entry files: server.go, main.go, lets.go, cmd/main.go.
+# - Proto directories for .proto presence.
+# - Optional files/tools influencing generated targets:
+#   - protoc.sh
+#   - cicd/cicd executable
+#   - Dockerfile
+#   - make, bash availability checks
+#
+# What It Affects / Does:
+# - Writes/overwrites Makefile and run.sh in target module (unless --dry-run).
+# - Makes run.sh executable.
+# - Emits targets conditionally (proto, cicd, dual-db validation) based on project shape.
+# - Performs lightweight post-generation checks (make -n help, bash -n run.sh) when possible.
 
 set -euo pipefail
 

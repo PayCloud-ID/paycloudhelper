@@ -1,4 +1,36 @@
 #!/usr/bin/env bash
+# new-service-scaffold.sh
+#
+# Purpose:
+# - Bootstrap a new service SDK structure under sdk/services/<service-name> using the
+#   paycloudhelper service-scoped SDK layout convention.
+# - Create starter docs and package doc.go files for helper/grpc/http/pb/proto/facade.
+#
+# Usage:
+# - ./scripts/proto/new-service-scaffold.sh <service-name>
+#
+# Options:
+# - Positional argument only:
+#   - <service-name> (required)
+#
+# What It Reads:
+# - Repository root inferred from script location.
+# - service-name argument.
+#
+# What It Affects / Does:
+# - Creates directories under sdk/services/<service-name>/.
+# - Writes/overwrites the following files:
+#   - helper/doc.go
+#   - grpc/doc.go
+#   - http/doc.go
+#   - pb/doc.go
+#   - proto/README.md
+#   - facade/doc.go
+# - Creates/overwrites docs/sdk/<service-name>-scaffold.md with next steps.
+# - Prints a scaffold summary and foundational checklist.
+#
+# Exit Behavior:
+# - Non-zero when service-name is missing or filesystem operations fail.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

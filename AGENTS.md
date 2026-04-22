@@ -119,6 +119,19 @@ go test -race ./...  # for init / concurrency changes
 - **CHANGELOG.md** — Update on every release-worthy change. Add entries under `[Unreleased]` in the appropriate category: **Added**, **Changed**, **Fixed**, **Deprecated**, **Removed**, **Security**. When cutting a release, move `[Unreleased]` content into a new version heading and add a link at the bottom.
 - If you only fix a typo or internal refactor with no user impact, a CHANGELOG line is optional; README only if it affects documented behavior.
 
+### 7. Script Changes Must Include Standard Header Docs
+
+Whenever creating or updating any shell script (`*.sh`), include/update the standardized inline header directly below the shebang with:
+
+- `Purpose`
+- `Usage`
+- `Options`
+- `What It Reads`
+- `What It Affects / Does`
+- `Exit Behavior`
+
+Do not leave script documentation for a follow-up commit.
+
 ## Key APIs at a Glance
 
 ### Logging (phlogger via root package)
@@ -291,6 +304,7 @@ Does the change touch an EXISTING exported function signature?
 | API Compatibility | `.agents/rules/api-compatibility.md` | Versioning contract, breaking change detection, deprecation |
 | Testing & Validation | `.agents/rules/testing-validation.md` | Test commands, patterns, coverage requirements |
 | Documentation & Changelog | `.agents/rules/documentation-changelog.md` | When and how to update README and CHANGELOG |
+| Script Documentation | `.agents/rules/script-documentation.md` | Mandatory inline header format for script create/update |
 
 ## Developer Workflows
 

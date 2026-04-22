@@ -1,4 +1,32 @@
 #!/usr/bin/env bash
+# check-stub-drift.sh
+#
+# Purpose:
+# - Detect drift between the local S3MinIO proto snapshot and the canonical source proto
+#   by running update + generation workflow and comparing checksums.
+# - Intended for CI/local guardrail to ensure committed snapshot consistency.
+#
+# Usage:
+# - ./scripts/proto/check-stub-drift.sh
+#
+# Options:
+# - No CLI options.
+# - Environment inherited by delegated scripts (for example S3MINIO_MANAGER_PROTO).
+#
+# What It Reads:
+# - Existing snapshot file: sdk/services/s3minio/proto/s3minio.proto (if present).
+# - sha256 checksum utility (shasum).
+# - Delegated scripts:
+#   - scripts/proto/update-s3minio-proto.sh
+#   - scripts/proto/gen-s3minio-client.sh
+#
+# What It Affects / Does:
+# - May refresh snapshot and regenerate/validate SDK packages via delegated scripts.
+# - Fails when snapshot content changes after sync/generation (indicating drift needing commit).
+#
+# Exit Behavior:
+# - 0: no drift detected.
+# - 1: drift detected after refresh (snapshot changed).
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

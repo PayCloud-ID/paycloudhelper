@@ -20,7 +20,7 @@
 Before starting any task:
 
 ```bash
-cd /Users/natan/Projects/_htdocs_pc/paycloudhelper
+cd ./paycloudhelper
 go test ./...          # all green baseline
 go build ./...         # no compile errors
 git status             # clean working tree (or stash)

@@ -1,7 +1,32 @@
 #!/usr/bin/env bash
-# run_tests.sh — Run all unit tests for paycloudhelper from repository root.
-# Usage: ./scripts/run_tests.sh [options]
-# Options: -v verbose, -race run with race detector, -cover show coverage, -coverprofile write coverage file
+# run_tests.sh
+#
+# Purpose:
+# - Run Go test suites for the full paycloudhelper module from repository root.
+# - Provide simple flags for verbose output, race detector, short mode, and coverage modes.
+#
+# Usage:
+# - ./scripts/run_tests.sh [options]
+#
+# Options:
+# - -v, --verbose     Enable verbose go test output.
+# - -race             Enable race detector.
+# - -cover            Enable per-package coverage in test output.
+# - -coverprofile     Generate coverage.out with atomic mode and print summary.
+# - -short            Pass -short to skip long-running tests.
+# - -h, --help        Show usage.
+#
+# What It Reads:
+# - Go module metadata and package sources under repository root.
+# - Existing CLI arguments.
+#
+# What It Affects / Does:
+# - Executes go test ./... with selected flags.
+# - May create/overwrite coverage.out when -coverprofile is provided.
+# - Prints coverage summary via go tool cover when coverage.out exists.
+#
+# Exit Behavior:
+# - Non-zero if any tests fail or go tool commands fail.
 
 set -e
 

@@ -1,20 +1,52 @@
 #!/usr/bin/env bash
+# check-no-direct-s3minio-http.sh
+#
+# Purpose:
+# - Enforce architecture boundaries by detecting disallowed direct S3MinIO HTTP/API usage
+#   across selected Go repositories.
+# - Allows only explicitly approved paths while failing CI/local checks for violations.
+#
+# Usage:
+# - From paycloudhelper root (or a parent directory containing the listed scan roots):
+#     ./scripts/check-no-direct-s3minio-http.sh
+#
+# Options:
+# - No CLI options.
+#
+# What It Reads:
+# - Go source files (*.go) under SCAN_ROOTS.
+# - Optional tools from PATH:
+#   - rg (preferred fast scanner)
+#   - grep (fallback scanner)
+# - Script constants:
+#   - SCAN_ROOTS: repository directories to scan
+#   - DENY_PATTERN: forbidden string/regex patterns
+#   - ALLOW_PATH_PATTERN: allowlisted file path regex
+#
+# What It Affects / Does:
+# - Read-only scan; does not modify files.
+# - Prints violations with file:line references.
+# - Exits non-zero when disallowed usage is found.
+#
+# Exit Behavior:
+# - 0: no violations, or only allowlisted matches.
+# - 1: at least one disallowed direct usage detected.
 set -euo pipefail
 
 SCAN_ROOTS=(
-  "/Users/natan/go/src/paycloud-be-adminft-manager"
-  "/Users/natan/go/src/paycloud-be-adminpg-manager"
-  "/Users/natan/go/src/paycloud-be-clientpg-manager"
-  "/Users/natan/go/src/paycloud-be-dashboard-manager"
-  "/Users/natan/go/src/paycloud-be-merchantft-manager"
-  "/Users/natan/go/src/paycloud-be-merchantpg-manager"
-  "/Users/natan/go/src/paycloud-be-reporting-manager"
-  "/Users/natan/go/src/paycloud-be-s3minio-manager"
-  "/Users/natan/Projects/_htdocs_pc/paycloudhelper"
+  "./paycloud-be-adminft-manager"
+  "./paycloud-be-adminpg-manager"
+  "./paycloud-be-clientpg-manager"
+  "./paycloud-be-dashboard-manager"
+  "./paycloud-be-merchantft-manager"
+  "./paycloud-be-merchantpg-manager"
+  "./paycloud-be-reporting-manager"
+  "./paycloud-be-s3minio-manager"
+  "./paycloudhelper"
 )
 
 DENY_PATTERN='Http_Minio|/api/v2/download|/api/v2/generate_view_url|/api/v2/download_file|/api/v2/view'
-ALLOW_PATH_PATTERN='^(/Users/natan/go/src/paycloud-be-s3minio-manager/|/Users/natan/Projects/_htdocs_pc/paycloudhelper/sdk/services/s3minio/http/)'
+ALLOW_PATH_PATTERN='^(./paycloud-be-s3minio-manager/|./paycloudhelper/sdk/services/s3minio/http/)'
 
 collect_go_files() {
   for root in "${SCAN_ROOTS[@]}"; do

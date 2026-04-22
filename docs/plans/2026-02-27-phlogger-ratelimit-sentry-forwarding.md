@@ -19,7 +19,7 @@
 Before starting any task:
 
 ```bash
-cd /Users/natan/Projects/_htdocs_pc/paycloudhelper
+cd ./paycloudhelper
 go test ./...          # all green baseline
 go build ./...         # no compile errors
 git status             # clean working tree (or stash)
@@ -402,7 +402,7 @@ func TestRateLimiter_ZeroWindow_AlwaysAllows(t *testing.T) {
 ### Step 2: Run tests to verify they fail
 
 ```bash
-cd /Users/natan/Projects/_htdocs_pc/paycloudhelper
+cd ./paycloudhelper
 go test ./phlogger/... -run TestRateLimiter -v
 ```
 
