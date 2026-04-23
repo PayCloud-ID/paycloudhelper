@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.8.2] - 2026-04-23
+
+### Added
+
+- **Script documentation policy** (`.agents/rules/script-documentation.md`): Added a repository rule requiring a standard header in every shell script (`Purpose`, `Usage`, `Options`, `What It Reads`, `What It Affects / Does`, `Exit Behavior`).
+
+### Changed
+
+- **Script path portability** (`scripts/check-no-direct-s3minio-http.sh`, `scripts/proto/update-s3minio-proto.sh`): Replaced machine-specific absolute paths with relative defaults for local and CI usage.
+- **`scripts/generate-makefile.sh`**: Formalized CLI options (`--service-path`, `--dry-run`, `-h/--help`) and added optional post-generation sanity checks (`make -n help`, `bash -n run.sh`).
+- **`scripts/run_tests.sh`**: Tightened option handling (`-race`, `-cover`, `-coverprofile`, `-short`, `-v/--verbose`) and now prints `go tool cover -func` summary when `-coverprofile` is used.
+- **`scripts/proto/update-s3minio-proto.sh`**: Added `S3MINIO_MANAGER_PROTO` override and changed missing-source behavior to a non-failing skip.
+- **`scripts/proto/check-stub-drift.sh`**: Hardened CI drift checks by refreshing proto artifacts and failing when drift is detected.
+
+### Added (Internal)
+
+- **Agent instruction alignment** (`AGENTS.md`, `.github/copilot-instructions.md`): Added explicit references to the script-header documentation rule.
+
+### Changed (Internal)
+
+- **Script doc-header rollout** (`scripts/check-no-direct-s3minio-http.sh`, `scripts/generate-makefile.sh`, `scripts/run_tests.sh`, `scripts/proto/new-service-scaffold.sh`, `scripts/proto/update-s3minio-proto.sh`, `scripts/proto/gen-s3minio-client.sh`, `scripts/proto/check-stub-drift.sh`): Applied the standardized shell-script header format to touched scripts.
+- **Planning docs refresh** (`docs/plans/*`): Updated internal execution/planning documents to match script-policy and proto-workflow updates.
+
 ## [v1.8.1] - 2026-04-19
 
 ### Added
@@ -113,5 +136,6 @@ History before this changelog was introduced. See git tags and release notes for
 Retracted versions (do not use): v1.6.3, v1.6.0, v1.5.2 — see `go.mod` retract block.
 
 [v1.8.1]: https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.8.0-beta.2..v1.8.1
+[v1.8.2]: https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.8.1..v1.8.2
 [v1.8.0-beta.2]: https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.7.1-beta.1..v1.8.0-beta.2
 [1.7.1-beta.1]: https://bitbucket.org/paycloudid/paycloudhelper/src/v1.7.1-beta.1
