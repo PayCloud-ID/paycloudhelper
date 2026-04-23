@@ -95,8 +95,7 @@ func TestRegisterSentryLogHook_IdempotentNoPanic(t *testing.T) {
 	phlogger.ClearLogHooks()
 	defer phlogger.ClearLogHooks()
 
-	prevOnce := sentryLogHookOnce
-	defer func() { sentryLogHookOnce = prevOnce }()
+	defer func() { sentryLogHookOnce = sync.Once{} }()
 	sentryLogHookOnce = sync.Once{}
 
 	RegisterSentryLogHook()

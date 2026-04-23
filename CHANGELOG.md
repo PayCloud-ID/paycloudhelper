@@ -7,7 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [v1.8.0-beta.2] - 2024-06-20
+## [v1.8.1] - 2026-04-19
+
+### Added
+
+- **`AuditTrailTrx` transaction audit trail** (`audittrail_trx_entities.go`, `audittrail_trx.go`):
+  Dedicated transaction lifecycle audit with structured `AuditTrailTrx` type, 15 lifecycle
+  state constants (`AuditTrxState*`), 4 status constants (`AuditTrxStatus*`), command constant
+  `CmdAuditTrailTrx`, and extensible `Metadata` field.
+- **`SetUpAuditTrailTrxPublisher()`**: Creates separate AMQP client + `AuditPublisher` worker pool
+  for transaction audit. Supports enable/disable via first parameter and reuses existing
+  functional options.
+- **`LogAuditTrailTrx(data AuditTrailTrx)`**: One-call audit publishing. Auto-sets `Service`
+  from `AppName` and `EventTime` from `time.Now()`. Requires at least one of `ReffNo`/`OrderNo`.
+- **`IsAuditTrailTrxEnabled()` / `GetAuditTrailTrxPublisher()`**: Status checks and lifecycle access.
+- **Unit tests** (`audittrail_trx_test.go`): Entity constants, publisher setup, enable/disable,
+  correlation validation, auto-defaults, metadata passthrough, concurrent safety, unique IDs.
+
+## [v1.8.0-beta.2] - 2026-04-14
 
 ### Added
 
@@ -95,5 +112,6 @@ History before this changelog was introduced. See git tags and release notes for
 
 Retracted versions (do not use): v1.6.3, v1.6.0, v1.5.2 — see `go.mod` retract block.
 
+[v1.8.1]: https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.8.0-beta.2..v1.8.1
 [v1.8.0-beta.2]: https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.7.1-beta.1..v1.8.0-beta.2
 [1.7.1-beta.1]: https://bitbucket.org/paycloudid/paycloudhelper/src/v1.7.1-beta.1

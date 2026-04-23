@@ -16,6 +16,7 @@
 - **Redis locks:** Use `AcquireLockWithRetry` + `sync.Once` for init, never raw nil checks
 - **Tests:** `go test -race ./...` required for any concurrency/init changes
 - **Versioning:** PATCH=bugfix, MINOR=new features, MAJOR=breaking (avoid)
+- **Scripts:** every new/updated `*.sh` must include standardized header docs (Purpose, Usage, Options, Reads, Affects/Does, Exit Behavior)
 - **Improvements backlog:** `.github/IMPROVEMENTS.md`
 
 ## Architecture & Design Patterns
