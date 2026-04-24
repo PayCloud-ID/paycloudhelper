@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"github.com/go-redsync/redsync/v4"
-	"github.com/go-redsync/redsync/v4/redis/goredis/v8"
+	"github.com/go-redsync/redsync/v4/redis/goredis/v9"
 )
 
 const (
@@ -168,8 +168,10 @@ func InitRedisOptions(rawOpt redis.Options) *redis.Options {
 	if ro.MaxRetryBackoff == 0 {
 		ro.MaxRetryBackoff = 500 * time.Millisecond
 	}
-	if ro.IdleTimeout == 0 {
-		ro.IdleTimeout = 5 * time.Minute
+	// go-redis/v8 used Options.IdleTimeout; in go-redis/v9 this became ConnMaxIdleTime.
+	// Keep the prior default behavior by setting ConnMaxIdleTime when unset.
+	if ro.ConnMaxIdleTime == 0 {
+		ro.ConnMaxIdleTime = 5 * time.Minute
 	}
 	redisOptions = ro
 

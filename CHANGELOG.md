@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Security
+
+- Bumped `golang.org/x/net` to `v0.51.0` to address `GO-2026-4559` (HTTP/2 server panic on certain frames).
+- Added `toolchain go1.25.9` in `go.mod` so local/CI builds use a patched Go toolchain that includes upstream security fixes for the Go 1.25 series.
+- **Breaking**: Migrated Redis client from `github.com/go-redis/redis/v8` to `github.com/redis/go-redis/v9` to align with current security advisories and maintenance.
+
 ## [v1.8.1] - 2026-04-19
 
 ### Added

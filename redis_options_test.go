@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 )
 
 func TestInitRedisOptions(t *testing.T) {
@@ -39,8 +39,8 @@ func TestInitRedisOptions(t *testing.T) {
 	if got.MaxRetryBackoff != 500*time.Millisecond {
 		t.Errorf("MaxRetryBackoff = %v, want 500ms", got.MaxRetryBackoff)
 	}
-	if got.IdleTimeout != 5*time.Minute {
-		t.Errorf("IdleTimeout = %v, want 5m", got.IdleTimeout)
+	if got.ConnMaxIdleTime != 5*time.Minute {
+		t.Errorf("ConnMaxIdleTime = %v, want 5m", got.ConnMaxIdleTime)
 	}
 }
 
