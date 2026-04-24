@@ -1,12 +1,14 @@
 package paycloudhelper
 
 import (
+	"context"
 	"os"
 	"strconv"
 	"time"
 
 	"bitbucket.org/paycloudid/paycloudhelper/phlogger"
 	"bitbucket.org/paycloudid/paycloudhelper/phsentry"
+	"bitbucket.org/paycloudid/paycloudhelper/phtrace"
 	"github.com/kataras/golog"
 )
 
@@ -58,6 +60,58 @@ func LogE(format string, args ...interface{}) {
 func LogF(format string, args ...interface{}) {
 	phlogger.LogF(format, args...)
 }
+
+// ── Context-aware variants (Phase 2 Task 2.8 / 2.9) ──────────────────────────
+// These log the supplied message with a `[trace_id=... span_id=...]` prefix
+// extracted from ctx when there is an active OpenTelemetry span. When ctx has
+// no span they behave exactly like LogI/LogE/etc. LogECtx additionally
+// records the error on the active span so Tempo/Jaeger surface it.
+
+// LogDCtx logs at Debug level with trace context prefix.
+func LogDCtx(ctx context.Context, format string, args ...interface{}) {
+	phtrace.LogDCtx(ctx, format, args...)
+}
+
+// LogICtx logs at Info level with trace context prefix.
+func LogICtx(ctx context.Context, format string, args ...interface{}) {
+	phtrace.LogICtx(ctx, format, args...)
+}
+
+// LogWCtx logs at Warning level with trace context prefix.
+func LogWCtx(ctx context.Context, format string, args ...interface{}) {
+	phtrace.LogWCtx(ctx, format, args...)
+}
+
+// LogECtx logs at Error level with trace context prefix and records an
+// exception event on the active span (if any).
+func LogECtx(ctx context.Context, format string, args ...interface{}) {
+	phtrace.LogECtx(ctx, format, args...)
+}
+
+// LogCtx is an alias alphabet — returns a ctx-bound logger that lets you add
+// standard fields (ticket_id, reff_no, merchant_id, order_id, trx_no, etc.)
+// once and have them appear on every log line. See phtrace.WithFields.
+func LogCtx(ctx context.Context, fields ...string) *phtrace.LogContextCtx {
+	return phtrace.WithFields(ctx, fields...)
+}
+
+// Standard log/span field keys re-exported from phtrace so callers can use
+// pchelper.FieldTicketID instead of importing phtrace directly. Promoting
+// these constants to the top-level package is part of Phase 2 Task 2.9 so
+// the field names can't drift across services.
+const (
+	FieldTraceID    = phtrace.FieldTraceID
+	FieldSpanID     = phtrace.FieldSpanID
+	FieldTicketID   = phtrace.FieldTicketID
+	FieldReffNo     = phtrace.FieldReffNo
+	FieldMerchantID = phtrace.FieldMerchantID
+	FieldOrderID    = phtrace.FieldOrderID
+	FieldTrxID      = phtrace.FieldTrxID
+	FieldTrxNo      = phtrace.FieldTrxNo
+	FieldService    = phtrace.FieldService
+	FieldRoute      = phtrace.FieldRoute
+	FieldVendor     = phtrace.FieldVendor
+)
 
 // LogIRated logs at Info level with rate limiting using key and the default 50ms window.
 func LogIRated(key string, format string, args ...interface{}) {
