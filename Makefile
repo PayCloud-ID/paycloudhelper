@@ -2,9 +2,21 @@
 	scripts.list script.run \
 	buf.lint \
 	proto.s3minio.update proto.s3minio.gen proto.s3minio.lint proto.s3minio.breaking proto.s3minio.check proto.service.scaffold \
-	ci.check.direct-http ci.check.stub-drift
+	ci.check.direct-http ci.check.stub-drift \
+	test-go test-coverage test-coverage-check
 
 BUF ?= buf
+
+# Merged coverage uses -coverpkg; default is the whole module. Project goal is
+# 90% merged statements; current baseline is lower — raise COVERAGE_MIN over time.
+COVERAGE_GOAL ?= 90
+COVERAGE_MIN ?= 42
+COVERAGE_PKGS ?= ./...
+
+GOTOOLCHAIN_VAL := $(shell awk '/^toolchain /{print $$2; exit}' go.mod)
+ifneq ($(GOTOOLCHAIN_VAL),)
+  export GOTOOLCHAIN := $(GOTOOLCHAIN_VAL)
+endif
 
 help: ## Display Makefile targets
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z0-9_.-]+:.*?## / {printf "\033[36m%-24s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -30,6 +42,18 @@ test-race: ## Run unit tests with race detector (recommended locally)
 test-cover: ## Run tests with coverage profile (coverage.out)
 	go test ./... -coverprofile=coverage.out -covermode=atomic
 	@go tool cover -func=coverage.out
+
+test-go: ## Run Go unit tests (short mode; no race)
+	go test -count=1 -short ./...
+
+test-coverage: ## Print merged coverage (COVERAGE_PKGS); summary tail
+	go test -count=1 -short -coverprofile=coverage.out -covermode=atomic \
+		-coverpkg=$(COVERAGE_PKGS) \
+		./...
+	go tool cover -func=coverage.out | tail -25
+
+test-coverage-check: ## Fail if merged coverage < COVERAGE_MIN (goal COVERAGE_GOAL)
+	@COVERAGE_MIN=$(COVERAGE_MIN) COVERAGE_GOAL=$(COVERAGE_GOAL) COVERAGE_PKGS=$(COVERAGE_PKGS) ./scripts/coverage-check.sh
 
 fmt: ## Run go fmt on all packages
 	go fmt ./...

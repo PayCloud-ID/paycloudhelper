@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Retains current `golang.org/x/net` / `golang.org/x/crypto` versions from the
   v1.9.0 dependency baseline (already at or above fixes for known HTTP/2 issues).
 
+### Added
+
+- **Makefile / CI helpers**: `test-go`, `test-coverage`, and `test-coverage-check`
+  plus `scripts/coverage-check.sh` for merged `-coverpkg` coverage (default
+  gate `COVERAGE_MIN=42` with `COVERAGE_GOAL=90`; raise the min as tests land).
+
 ## [v1.9.0] - 2026-04-22
 
 ### Added

@@ -416,6 +416,15 @@ Unit tests cover helpers, headers, configuration, response handling, Redis optio
 go tool cover -html=coverage.out   # open HTML report (after -coverprofile)
 ```
 
+**Makefile (short tests + merged coverage):**
+
+```bash
+make test-go                 # go test -short ./...
+make test-coverage           # merged -coverpkg=$(COVERAGE_PKGS) (default ./...)
+make test-coverage-check     # fail if merged total < COVERAGE_MIN (default 42; goal 90%)
+make test-coverage-check COVERAGE_MIN=90   # enforce 90% when the suite is ready
+```
+
 **Without the script:**
 
 ```bash
