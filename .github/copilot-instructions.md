@@ -362,7 +362,7 @@ This library follows **strict semantic versioning** because multiple production 
    - Check for deprecated API usage
 
 3. **Pin Critical Versions**
-   - Redis: `github.com/go-redis/redis/v8` (v8 is stable)
+   - Redis: `github.com/redis/go-redis/v9` (pinned major; avoid unplanned major bumps)
    - Echo: Major version in go.mod
    - AMQP: Pin to tested version
 

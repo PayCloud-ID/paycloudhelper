@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v2.0.0] - 2026-04-24
+
+### Changed (Breaking)
+
+- **Redis client**: migrated from `github.com/go-redis/redis/v8` to
+  `github.com/redis/go-redis/v9` (`v9.18.0`). Exported types in the root
+  package (`redis.Options`, `*redis.Client`, etc.) now use the v9 module path;
+  services must update imports and recompile.
+- **RedSync**: bumped to `github.com/go-redsync/redsync/v4@v4.16.0` and use the
+  `goredis/v9` pool adapter with the v9 client.
+
+### Security
+
+- `go.mod` sets `toolchain go1.25.9` so builds use a patched Go 1.25 toolchain.
+- Retains current `golang.org/x/net` / `golang.org/x/crypto` versions from the
+  v1.9.0 dependency baseline (already at or above fixes for known HTTP/2 issues).
+
 ## [v1.9.0] - 2026-04-22
 
 ### Added
@@ -170,6 +187,8 @@ History before this changelog was introduced. See git tags and release notes for
 
 Retracted versions (do not use): v1.6.3, v1.6.0, v1.5.2 — see `go.mod` retract block.
 
+[v2.0.0]: https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.9.0..v2.0.0
+[v1.9.0]: https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.8.1..v1.9.0
 [v1.8.1]: https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.8.0-beta.2..v1.8.1
 [v1.8.0-beta.2]: https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.7.1-beta.1..v1.8.0-beta.2
 [1.7.1-beta.1]: https://bitbucket.org/paycloudid/paycloudhelper/src/v1.7.1-beta.1
