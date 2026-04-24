@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+func TestLoggerErrorHub_WithExtraArgs(t *testing.T) {
+	LoggerErrorHub("plain", "extra")
+}
+
 // TestResponseApiSuccess tests successful response
 func TestResponseApiSuccess(t *testing.T) {
 	data := map[string]string{"key": "value"}

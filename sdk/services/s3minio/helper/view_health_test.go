@@ -64,6 +64,14 @@ func TestGetViewURLError(t *testing.T) {
 	}
 }
 
+func TestGetViewURL_nonOKUsesDefaultMessageWhenEmpty(t *testing.T) {
+	t.Parallel()
+	_, err := GetViewURL(context.Background(), fakeViewer{res: &DownloadResponse{Code: 500, Message: ""}}, "obj.png", 1, 2)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 func TestCheckHealth(t *testing.T) {
 	t.Parallel()
 

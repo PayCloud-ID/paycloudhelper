@@ -420,10 +420,14 @@ go tool cover -html=coverage.out   # open HTML report (after -coverprofile)
 
 ```bash
 make test-go                 # go test -short ./...
-make test-coverage           # merged -coverpkg=$(COVERAGE_PKGS) (default ./...)
-make test-coverage-check     # fail if merged total < COVERAGE_MIN (default 42; goal 90%)
+make test-coverage           # merged -coverpkg=$(COVERAGE_PKGS)
+make coverage-inventory      # coverage.out + coverage-func.txt + summary (same -coverpkg defaults)
+make test-coverage-check     # fail if merged total < COVERAGE_MIN (default 65; goal 90%)
 make test-coverage-check COVERAGE_MIN=90   # enforce 90% when the suite is ready
+make test-coverage-integration   # optional: same merged -coverpkg without -short
 ```
+
+`COVERAGE_PKGS` defaults to all packages from `go list ./...` **except** `phaudittrailv0` (legacy dial-heavy) and **`sdk/shared/*`** (doc-only placeholder packages). Use `COVERAGE_PKGS=./...` to include everything in the merged profile.
 
 **Without the script:**
 

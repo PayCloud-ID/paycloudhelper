@@ -3,15 +3,16 @@
 	buf.lint \
 	proto.s3minio.update proto.s3minio.gen proto.s3minio.lint proto.s3minio.breaking proto.s3minio.check proto.service.scaffold \
 	ci.check.direct-http ci.check.stub-drift \
-	test-go test-coverage test-coverage-check
+	test-go test-coverage test-coverage-check coverage-inventory test-coverage-integration
 
 BUF ?= buf
 
-# Merged coverage uses -coverpkg; default is the whole module. Project goal is
-# 90% merged statements; current baseline is lower — raise COVERAGE_MIN over time.
+# Merged coverage uses -coverpkg. Default excludes legacy phaudittrailv0 (dial-heavy,
+# no deterministic -short coverage); override with COVERAGE_PKGS=./... to include it.
+# Project goal is 90% merged statements; raise COVERAGE_MIN as coverage improves.
 COVERAGE_GOAL ?= 90
-COVERAGE_MIN ?= 42
-COVERAGE_PKGS ?= ./...
+COVERAGE_MIN ?= 65
+COVERAGE_PKGS ?= $(shell go list ./... | grep -Fv '/phaudittrailv0' | grep -Fv '/sdk/shared/' | tr '\n' ',' | sed 's/,$$//')
 
 GOTOOLCHAIN_VAL := $(shell awk '/^toolchain /{print $$2; exit}' go.mod)
 ifneq ($(GOTOOLCHAIN_VAL),)
@@ -55,11 +56,20 @@ test-coverage: ## Print merged coverage (COVERAGE_PKGS); summary tail
 test-coverage-check: ## Fail if merged coverage < COVERAGE_MIN (goal COVERAGE_GOAL)
 	@COVERAGE_MIN=$(COVERAGE_MIN) COVERAGE_GOAL=$(COVERAGE_GOAL) COVERAGE_PKGS=$(COVERAGE_PKGS) ./scripts/coverage-check.sh
 
+coverage-inventory: ## Merged coverage + grouped inventory (writes coverage.out, coverage-func.txt)
+	@COVERAGE_PKGS=$(COVERAGE_PKGS) ./scripts/coverage-inventory.sh
+
+test-coverage-integration: ## Same as test-coverage but without -short (optional CI / nightly)
+	go test -count=1 -coverprofile=coverage-integration.out -covermode=atomic \
+		-coverpkg=$(COVERAGE_PKGS) \
+		./...
+	@go tool cover -func=coverage-integration.out | tail -8
+
 fmt: ## Run go fmt on all packages
 	go fmt ./...
 
 clean: ## Remove coverage output
-	rm -f coverage.out
+	rm -f coverage.out coverage-func.txt coverage-integration.out
 
 scripts.list: ## List executable scripts under scripts/
 	@find scripts -type f -name '*.sh' -print | sort

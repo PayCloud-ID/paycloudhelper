@@ -16,6 +16,15 @@ func TestValidatorConstants(t *testing.T) {
 	}
 }
 
+func TestToString_nonString(t *testing.T) {
+	if got := toString(42); got != "42" {
+		t.Fatalf("toString(42)=%q want 42", got)
+	}
+	if got := toString([]byte("x")); got != "[120]" { // fmt %v for []byte
+		t.Fatalf("toString([]byte)=%q", got)
+	}
+}
+
 func TestHeaders_ValiadateHeaderIdem_WithValidatorRules(t *testing.T) {
 	// Rules registered in init()
 	tests := []struct {

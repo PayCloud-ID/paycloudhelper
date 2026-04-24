@@ -228,3 +228,99 @@ func TestBuildSentryTitle_NilClientOptionsFallsBackToAppEnv(t *testing.T) {
 		t.Errorf("buildSentryTitle() = %q, expected prefix \"[ReadyCheck] [env=", got)
 	}
 }
+
+// captureTransport records events without network I/O.
+type captureTransport struct {
+	mu     sync.Mutex
+	events []*sentry.Event
+}
+
+func (c *captureTransport) Flush(timeout time.Duration) bool { return true }
+
+func (c *captureTransport) FlushWithContext(ctx context.Context) bool { return true }
+
+func (c *captureTransport) Configure(options sentry.ClientOptions) {}
+
+func (c *captureTransport) SendEvent(event *sentry.Event) {
+	if event == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	cp := *event
+	c.events = append(c.events, &cp)
+}
+
+func (c *captureTransport) Close() {}
+
+func TestReceiveLog_WithClient_CapturesLevels(t *testing.T) {
+	prevC := sentryClient
+	prevO := sentryClientOptions
+	prevD := sentryBreadcrumbData
+	defer func() {
+		sentryClient = prevC
+		sentryClientOptions = prevO
+		sentryBreadcrumbData = prevD
+	}()
+
+	tr := &captureTransport{}
+	sentryClient = nil
+	sentryClientOptions = nil
+	sentryBreadcrumbData = nil
+
+	client, err := sentry.NewClient(sentry.ClientOptions{
+		Dsn:       "http://public@example.com/1",
+		Transport: tr,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	sentryClient = client
+
+	ReceiveLog("info", "[Svc] informational note")
+	ReceiveLog("error", "[Svc] failure err=broken")
+	ReceiveLog("fatal", "[Svc] fatal err=stop")
+
+	tr.mu.Lock()
+	n := len(tr.events)
+	tr.mu.Unlock()
+	if n == 0 {
+		t.Fatal("expected at least one captured Sentry event")
+	}
+}
+
+// TestSendToSentryCapturePaths_WithClient exercises captureWithBreadcrumb via
+// public SendToSentry* APIs (in-memory transport, no network).
+func TestSendToSentryCapturePaths_WithClient(t *testing.T) {
+	prevC := sentryClient
+	prevO := sentryClientOptions
+	defer func() {
+		sentryClient = prevC
+		sentryClientOptions = prevO
+	}()
+
+	tr := &captureTransport{}
+	client, err := sentry.NewClient(sentry.ClientOptions{
+		Dsn:         "http://public@example.com/1",
+		Transport:   tr,
+		Environment: "test",
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	sentryClient = client
+	sentryClientOptions = &sentry.ClientOptions{Dsn: "http://public@example.com/1"}
+
+	SendToSentryMessage("hello", "svc", "mod", "fn")
+	SendToSentryError(errors.New("err"), "svc", "mod", "fn")
+	SendToSentryWarning(errors.New("warn"), "svc", "mod", "fn")
+	SendToSentryDebug(errors.New("dbg"), "svc", "mod", "fn")
+	SendToSentryEvent(&sentry.Event{Message: "ev"}, "svc", "mod", "fn")
+
+	tr.mu.Lock()
+	n := len(tr.events)
+	tr.mu.Unlock()
+	if n < 5 {
+		t.Fatalf("expected at least 5 captured events, got %d", n)
+	}
+}

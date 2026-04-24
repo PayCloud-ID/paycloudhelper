@@ -5,9 +5,10 @@
 #   ./scripts/coverage-check.sh
 #   COVERAGE_MIN=90 COVERAGE_PKGS=./... ./scripts/coverage-check.sh
 # Options
-#   COVERAGE_MIN   — fail if merged total % is below this (default: 90 if unset).
+#   COVERAGE_MIN   — fail if merged total % is below this (default: 90 if unset; Makefile sets 55).
 #   COVERAGE_GOAL  — informational project target (default: 90); warns if below.
 #   COVERAGE_PKGS  — comma-separated packages for -coverpkg (default: ./...).
+#                    The Makefile defaults to all packages except phaudittrailv0.
 # What It Reads
 #   go.mod (optional `toolchain` line sets GOTOOLCHAIN for consistent builds).
 # What It Affects / Does

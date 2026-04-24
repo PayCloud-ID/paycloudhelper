@@ -139,3 +139,63 @@ func TestGetRedisPoolClient_ReturnsErrorWhenNotInitialized(t *testing.T) {
 	}
 }
 
+// TestInitRedisOptions_ConnMaxIdleTime_customPreserved verifies that a non-zero ConnMaxIdleTime
+// is not overridden by the v9 migration default (v8's IdleTimeout was renamed in v9).
+func TestInitRedisOptions_ConnMaxIdleTime_customPreserved(t *testing.T) {
+	custom := 10 * time.Minute
+	got := InitRedisOptions(redis.Options{
+		Addr:            "localhost:6379",
+		ConnMaxIdleTime: custom,
+	})
+	if got == nil {
+		t.Fatal("InitRedisOptions returned nil")
+	}
+	if got.ConnMaxIdleTime != custom {
+		t.Errorf("ConnMaxIdleTime = %v, want %v (custom value should be preserved, not overridden by default)", got.ConnMaxIdleTime, custom)
+	}
+}
+
+// TestInitRedisOptions_ReadTimeout_addsToDefaultTimeout verifies that a non-zero ReadTimeout
+// is accumulated into DefaultRedisTimeout (documented v9 migration behavior).
+func TestInitRedisOptions_ReadTimeout_addsToDefaultTimeout(t *testing.T) {
+	// Restore DefaultRedisTimeout after test to avoid polluting sibling tests.
+	orig := DefaultRedisTimeout
+	t.Cleanup(func() { DefaultRedisTimeout = orig })
+
+	DefaultRedisTimeout = 1000 * time.Millisecond // reset to known baseline
+	before := DefaultRedisTimeout
+	rt := 500 * time.Millisecond
+
+	got := InitRedisOptions(redis.Options{
+		Addr:        "localhost:6379",
+		ReadTimeout: rt,
+	})
+	if got == nil {
+		t.Fatal("InitRedisOptions returned nil")
+	}
+	if got.ReadTimeout != rt {
+		t.Errorf("ReadTimeout = %v, want %v", got.ReadTimeout, rt)
+	}
+	want := before + rt
+	if DefaultRedisTimeout != want {
+		t.Errorf("DefaultRedisTimeout = %v, want %v (baseline + ReadTimeout)", DefaultRedisTimeout, want)
+	}
+}
+
+// TestInitRedisOptions_ReadTimeout_zeroDoesNotChangeDefault verifies that ReadTimeout=0
+// leaves DefaultRedisTimeout unchanged.
+func TestInitRedisOptions_ReadTimeout_zeroDoesNotChangeDefault(t *testing.T) {
+	orig := DefaultRedisTimeout
+	t.Cleanup(func() { DefaultRedisTimeout = orig })
+
+	DefaultRedisTimeout = 1000 * time.Millisecond
+	before := DefaultRedisTimeout
+
+	InitRedisOptions(redis.Options{
+		Addr:        "localhost:6379",
+		ReadTimeout: 0,
+	})
+	if DefaultRedisTimeout != before {
+		t.Errorf("DefaultRedisTimeout = %v, want %v (zero ReadTimeout must not modify it)", DefaultRedisTimeout, before)
+	}
+}

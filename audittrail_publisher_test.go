@@ -1,9 +1,13 @@
 package paycloudhelper
 
 import (
+	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 // ---------------------------------------------------------------------------
@@ -269,5 +273,47 @@ func TestAuditPublisher_ProcessMessage_ClientNotReady(t *testing.T) {
 
 	if p.consecutiveFailures.Load() == 0 {
 		t.Error("expected failure to be recorded for not-ready client")
+	}
+}
+
+// TestAuditPublisher_ProcessMessage_PushError verifies a ready client whose
+// PushWithTTL fails records a failure (processMessage push error branch).
+func TestAuditPublisher_ProcessMessage_PushError(t *testing.T) {
+	client := &AmqpClient{
+		m:         &sync.Mutex{},
+		isReady:   true,
+		queueName: "audit",
+	}
+	client.publishForTest = func(context.Context, string, string, bool, bool, amqp.Publishing) error {
+		return errors.New("publish failed")
+	}
+	p := NewAuditPublisher(client)
+	before := p.consecutiveFailures.Load()
+	p.processMessage(auditMessage{
+		payload: MessagePayloadAudit{Id: 7, Command: CmdAuditTrailData},
+	})
+	if p.consecutiveFailures.Load() <= before {
+		t.Fatalf("expected failure count to increase, before=%d after=%d", before, p.consecutiveFailures.Load())
+	}
+}
+
+// TestAuditPublisher_ProcessMessage_SuccessClearsFailures verifies a successful
+// push resets the consecutive failure counter.
+func TestAuditPublisher_ProcessMessage_SuccessClearsFailures(t *testing.T) {
+	client := &AmqpClient{
+		m:         &sync.Mutex{},
+		isReady:   true,
+		queueName: "audit",
+	}
+	client.publishForTest = func(context.Context, string, string, bool, bool, amqp.Publishing) error {
+		return nil
+	}
+	p := NewAuditPublisher(client)
+	p.consecutiveFailures.Store(4)
+	p.processMessage(auditMessage{
+		payload: MessagePayloadAudit{Id: 8, Command: CmdAuditTrailData},
+	})
+	if p.consecutiveFailures.Load() != 0 {
+		t.Fatalf("want consecutiveFailures=0 after success, got %d", p.consecutiveFailures.Load())
 	}
 }

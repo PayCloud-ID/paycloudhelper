@@ -45,3 +45,12 @@ func TestDefaultPhaseBuckets_Monotonic(t *testing.T) {
 		}
 	}
 }
+
+func TestMustPhaseHistogram(t *testing.T) {
+	name := "must_hist_" + t.Name()
+	h := MustPhaseHistogram("must_meter_"+t.Name(), name, []float64{1, 2, 3})
+	if h == nil {
+		t.Fatal("MustPhaseHistogram returned nil")
+	}
+	h.Record(context.Background(), "phase_x", 2*time.Millisecond)
+}

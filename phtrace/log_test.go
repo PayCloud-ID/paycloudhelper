@@ -14,6 +14,13 @@ func TestBuildPrefix_NoSpanNoFields(t *testing.T) {
 	}
 }
 
+func TestBuildPrefix_nilContextWithFields(t *testing.T) {
+	p := buildPrefix(nil, []string{"k", "v"})
+	if !strings.Contains(p, "k=v") {
+		t.Fatalf("expected k=v in prefix, got %q", p)
+	}
+}
+
 func TestBuildPrefix_WithSpanOnly(t *testing.T) {
 	tid, _ := trace.TraceIDFromHex("0102030405060708090a0b0c0d0e0f10")
 	sid, _ := trace.SpanIDFromHex("1112131415161718")
@@ -60,4 +67,22 @@ func TestWithFields_Chain(t *testing.T) {
 	if lc.fields[0] != "a" || lc.fields[2] != "b" {
 		t.Errorf("field order corrupted: %v", lc.fields)
 	}
+}
+
+type logCtxTestKey struct{}
+
+func TestLogContextCtx_Ctx(t *testing.T) {
+	ctx := context.WithValue(context.Background(), logCtxTestKey{}, "v")
+	lc := WithFields(ctx, "a", "1")
+	if lc.Ctx() != ctx {
+		t.Fatal("Ctx() must return the underlying context")
+	}
+}
+
+func TestLogContextCtx_LogMethods_NoPanic(t *testing.T) {
+	lc := WithFields(context.Background(), "ticket_id", "T-9")
+	lc.LogD("debug %s", "x")
+	lc.LogI("info %s", "i")
+	lc.LogW("warn")
+	lc.LogE("err %s", "e")
 }

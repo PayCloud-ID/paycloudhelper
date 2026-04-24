@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/go-redsync/redsync/v4"
 	"github.com/go-redsync/redsync/v4/redis/goredis/v9"
+	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -399,8 +399,10 @@ func AcquireLock(key string, ttl time.Duration) (bool, error) {
 	// Try to obtain the lock
 	err := mutex.LockContext(ctx)
 	if err != nil {
-		if err == redsync.ErrFailed {
-			// Lock not acquired but no error occurred (already held by another process)
+		// ErrFailed: retries exhausted without quorum. ErrTaken: quorum agrees lock is held.
+		// Both represent normal contention — not an infrastructure error.
+		var errTaken *redsync.ErrTaken
+		if err == redsync.ErrFailed || errors.As(err, &errTaken) {
 			LogD("%s lock already held key=%s", buildLogPrefix("AcquireLock"), key)
 			return false, nil
 		}
@@ -495,8 +497,10 @@ func AcquireLockWithRetry(key string, ttl time.Duration, maxRetries int, retryDe
 	// Try to obtain the lock
 	err := mutex.LockContext(ctx)
 	if err != nil {
-		if err == redsync.ErrFailed {
-			// Lock not acquired but no error occurred
+		// ErrFailed: retries exhausted without quorum. ErrTaken: quorum agrees lock is held.
+		// Both represent normal contention — not an infrastructure error.
+		var errTaken *redsync.ErrTaken
+		if err == redsync.ErrFailed || errors.As(err, &errTaken) {
 			return nil, false, nil
 		}
 		return nil, false, fmt.Errorf("failed to acquire lock for key %s: %w", key, err)
@@ -554,4 +558,17 @@ func GetTrxRedisLockTimeout() time.Duration {
 		rInt = val
 	}
 	return time.Duration(rInt) * time.Millisecond
+}
+
+// resetRedisClientStateForTesting tears down package-level Redis state so tests can
+// attach a fresh client (e.g. miniredis). Only for paycloudhelper package tests.
+func resetRedisClientStateForTesting() {
+	if redisPoolClient != nil {
+		_ = redisPoolClient.Close()
+		redisPoolClient = nil
+	}
+	redisSync = nil
+	redisSyncInitOnce = sync.Once{}
+	redisSyncInitErr = nil
+	redisOptions = nil
 }
