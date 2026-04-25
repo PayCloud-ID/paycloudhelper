@@ -2,21 +2,32 @@
 
 **Go shared library** — common utilities for all PayCloud Hub microservices.
 
+---
+
+**Version:** 2.1.0
+**Go Version:** 1.25.0 (toolchain: go1.25.9)
+**Last Updated:** April 25, 2026
+
 Module: `bitbucket.org/paycloudid/paycloudhelper`  
 Go: 1.25 (toolchain pinned via `go.mod`)
 
 ---
 
 ## Table of Contents
+
 - [Overview](#overview)
+- [Architecture](#architecture)
 - [Quick Start](#quick-start)
 - [Package Structure](#package-structure)
 - [API Reference](#api-reference)
+- [Integrations](#integrations)
 - [Configuration](#configuration)
 - [Testing](#testing)
 - [Verifying the library](#verifying-the-library)
+- [Consumer Migration (v2.0.0 / Redis v9)](#consumer-migration-v200--redis-v9)
 - [CI (Bitbucket Pipelines)](#ci-bitbucket-pipelines)
 - [Versioning](#versioning)
+- [Automation Prompts](#automation-prompts)
 - [Contributing](#contributing)
 
 ---
@@ -36,6 +47,45 @@ Consumer must explicitly call:
   SetUpRabbitMq(...)               → Audit trail
   InitSentry(options)              → Error tracking (optional)
   ConfigureLogForwarding(cfg)      → Log → Sentry forwarding (optional)
+```
+
+---
+
+## Architecture
+
+### Service Flow
+
+```mermaid
+flowchart TD
+    Consumer[Consumer Service] -->|import| Init[paycloudhelper init]
+    Init --> AddValidator[AddValidatorLibs]
+    Init --> InitLogger[InitializeLogger]
+    Init --> InitApp[InitializeApp]
+    Consumer -->|explicit call| InitRedis[InitializeRedisWithRetry]
+    Consumer -->|explicit call| InitRabbit[SetUpRabbitMq]
+    Consumer -->|optional call| InitSentry[InitSentry]
+    Consumer -->|runtime usage| RedisOps[Store/Get/Lock helpers]
+    Consumer -->|runtime usage| Middleware[CSRF/Idempotency/Revoke middleware]
+    Consumer -->|runtime usage| AuditTrail[Audit trail publish]
+```
+
+### Integration Map
+
+```mermaid
+flowchart LR
+    subgraph paycloudhelper
+        Core[Root package]
+        Logger[phlogger]
+        Sentry[phsentry]
+        Helper[phhelper]
+    end
+
+    Service[Consumer service] --> Core
+    Core --> Redis[(Redis)]
+    Core --> Rabbit[(RabbitMQ)]
+    Core --> SentrySDK[(Sentry)]
+    Core --> Logger
+    Core --> Helper
 ```
 
 ---
@@ -60,16 +110,18 @@ pch.ConfigureLogForwarding(pch.LogForwardConfig{
 
 ## Package Structure
 
-| Package | Path | Purpose |
-|---------|------|---------|
-| Root | `.` | Public API — all below re-exported here |
-| `phlogger` | `phlogger/` | Logger wrapper (`kataras/golog`) + sampler + context logger + metrics hooks + KeyedLimiter + forwarding hooks |
-| `phsentry` | `phsentry/` | Sentry error tracking, log receiver |
-| `phhelper` | `phhelper/` | Global state (`APP_NAME`, `APP_ENV`), JSON/string helpers |
-| `phaudittrailv0` | `phaudittrailv0/` | Legacy v0 audit trail (RabbitMQ) |
-| `phjson` | `phjson/` | Sonic JSON wrapper for high-throughput consumers |
-| `sdk/services/s3minio` | `sdk/services/s3minio/` | Service-scoped S3MinIO SDK (helper, grpc, http bridge, pb, proto, facade) |
-| `sdk/shared` | `sdk/shared/` | Shared runtime placeholders for transport, observability, and error normalization across future SDKs |
+
+| Package                | Path                    | Purpose                                                                                                       |
+| ---------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Root                   | `.`                     | Public API — all below re-exported here                                                                       |
+| `phlogger`             | `phlogger/`             | Logger wrapper (`kataras/golog`) + sampler + context logger + metrics hooks + KeyedLimiter + forwarding hooks |
+| `phsentry`             | `phsentry/`             | Sentry error tracking, log receiver                                                                           |
+| `phhelper`             | `phhelper/`             | Global state (`APP_NAME`, `APP_ENV`), JSON/string helpers                                                     |
+| `phaudittrailv0`       | `phaudittrailv0/`       | Legacy v0 audit trail (RabbitMQ)                                                                              |
+| `phjson`               | `phjson/`               | Sonic JSON wrapper for high-throughput consumers                                                              |
+| `sdk/services/s3minio` | `sdk/services/s3minio/` | Service-scoped S3MinIO SDK (helper, grpc, http bridge, pb, proto, facade)                                     |
+| `sdk/shared`           | `sdk/shared/`           | Shared runtime placeholders for transport, observability, and error normalization across future SDKs          |
+
 
 ### Service-Scoped SDK Foundation
 
@@ -102,11 +154,13 @@ pch.LogErr(err)                              // Error shorthand (no format strin
 
 All log functions (`LogI`, `LogE`, `LogW`, `LogD`, `LogF`) are **sampled by default** using the format string as key. The sampler uses an **Initial/Thereafter** pattern per time period:
 
-| Environment | Initial | Thereafter | Period | Behavior |
-|-------------|---------|------------|--------|----------|
-| `production` / `prod` | 5 | 50 | 1s | First 5/sec per key, then every 50th |
-| `staging` / `stg` | 10 | 10 | 1s | First 10/sec, then every 10th |
-| `develop` / `""` (default) | 0 (disabled) | — | — | All logs pass through |
+
+| Environment                | Initial      | Thereafter | Period | Behavior                             |
+| -------------------------- | ------------ | ---------- | ------ | ------------------------------------ |
+| `production` / `prod`      | 5            | 50         | 1s     | First 5/sec per key, then every 50th |
+| `staging` / `stg`          | 10           | 10         | 1s     | First 10/sec, then every 10th        |
+| `develop` / `""` (default) | 0 (disabled) | —          | —      | All logs pass through                |
+
 
 The sampler is initialized automatically from `APP_ENV`. Override at startup:
 
@@ -208,12 +262,14 @@ pch.LogI("[Main.start] listening on :8080") // → Sentry breadcrumb
 
 **Environment Variables:**
 
-| Env Var | Default | Effect |
-|---------|---------|--------|
+
+| Env Var          | Default | Effect                                                                                                                                                   |
+| ---------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `SENTRY_LOGGING` | `false` | Enable/disable structured logging to Sentry. Accepts: `true`, `1`, `t`, `T`, `false`, `0`, `f`, `F` (case-insensitive). Invalid values default to false. |
-| `SENTRY_DSN` | empty | Sentry ingestion endpoint |
-| `SENTRY_RELEASE` | empty | Application version |
-| `SENTRY_DEBUG` | `false` | Verbose SDK diagnostics (local/staging only) |
+| `SENTRY_DSN`     | empty   | Sentry ingestion endpoint                                                                                                                                |
+| `SENTRY_RELEASE` | empty   | Application version                                                                                                                                      |
+| `SENTRY_DEBUG`   | `false` | Verbose SDK diagnostics (local/staging only)                                                                                                             |
+
 
 **How It Works:**
 
@@ -271,13 +327,15 @@ Initialize Sentry for error tracking. A non-empty `Dsn` is required; an empty DS
 
 **For structured logging integration**, see [Sentry Structured Logging](#sentry-structured-logging) above.
 
-**`Debug` and `SENTRY_DEBUG`:** This only controls SDK internal diagnostics verbosity, not structured logging. When `Debug` is `true`, the sentry-go SDK prints verbose diagnostics to the configured `DebugWriter` (default: application logs with `[pchelper.Sentry]` prefix).
+`**Debug` and `SENTRY_DEBUG`:** This only controls SDK internal diagnostics verbosity, not structured logging. When `Debug` is `true`, the sentry-go SDK prints verbose diagnostics to the configured `DebugWriter` (default: application logs with `[pchelper.Sentry]` prefix).
 
-| Deploy context | Typical `Debug` value |
-|----------------|----------------------|
+
+| Deploy context                 | Typical `Debug` value                                           |
+| ------------------------------ | --------------------------------------------------------------- |
 | Local / active troubleshooting | `true` only while fixing DSN, network, or “events not arriving” |
-| Staging | Usually `false`; `true` briefly if you are debugging the SDK |
-| Production | `false` (less noise and log volume) |
+| Staging                        | Usually `false`; `true` briefly if you are debugging the SDK    |
+| Production                     | `false` (less noise and log volume)                             |
+
 
 ```go
 pch.InitSentry(pch.SentryOptions{
@@ -311,6 +369,7 @@ url, err := s3helper.GetPresignedURL(ctx, Adapter{}, "file.pdf", userID, merchan
 ```
 
 Available helpers:
+
 - `BuildDownloadRequest`
 - `BuildUploadRequestForMultipart`
 - `BuildUploadRequestForFile`
@@ -363,26 +422,48 @@ e.Use(pch.RevokeToken)     // JWT + Redis revocation check
 
 ---
 
+## Integrations
+
+### Redis
+
+- **Purpose:** caching, idempotency, token revoke checks, distributed locks.
+- **Connection:** provided by consumer service config and initialized through `InitializeRedisWithRetry`.
+- **Key operations:** `StoreRedis`, `GetRedis`, `DeleteRedis`, `AcquireLockWithRetry`, `ReleaseLockWithRetry`.
+
+### RabbitMQ
+
+- **Purpose:** publish audit trail payloads (v1 and v2 publisher modes).
+- **Connection:** set through `SetUpRabbitMq` or v2 publisher setup APIs.
+- **Key operations:** process/data audit log publishing with retry and backpressure controls.
+
+### Sentry
+
+- **Purpose:** exception capture and optional structured log forwarding.
+- **Connection:** `InitSentry` with DSN/environment/release options.
+- **Key operations:** panic/error forwarding, breadcrumb stream from logger hooks.
+
 ## Configuration
 
 All configuration is loaded from environment variables in `InitializeApp()`:
 
-| Var | Required | Default | Purpose |
-|-----|----------|---------|---------|
-| `APP_NAME` | Yes | `""` | Service name (used in Sentry, logs) |
-| `APP_ENV` | Yes | `""` | `develop` / `staging` / `production` |
-| `REDIS_HOST` | For Redis | `""` | Redis server |
-| `REDIS_PORT` | For Redis | `6379` | Redis port |
-| `REDIS_PASSWORD` | No | `""` | Redis auth |
-| `SENTRY_DSN` | For Sentry | `""` | Sentry project DSN (validated in `InitializeApp`; empty disables Sentry) |
-| `SENTRY_LOGGING` | No | `false` | Enable structured logging to Sentry (all log levels) |
-| `SENTRY_DEBUG` | No | `false` | **Not read by this library.** Services pass `Debug: os.Getenv("SENTRY_DEBUG") == "true"` into `InitSentry` if desired; controls SDK diagnostics verbosity. |
-| `LOG_FORWARD_FATAL` | No | `true` | Forward Fatal → Sentry (legacy; use `SENTRY_LOGGING` instead) |
-| `LOG_FORWARD_ERROR` | No | `true` | Forward Error → Sentry (legacy; use `SENTRY_LOGGING` instead) |
-| `LOG_FORWARD_WARN` | No | `false` | Forward Warn → Sentry (legacy; use `SENTRY_LOGGING` instead) |
-| `LOG_FORWARD_INFO` | No | `false` | Forward Info → Sentry (legacy; use `SENTRY_LOGGING` instead) |
-| `TRANSACTION_REDIS_LOCK_TIMEOUT` | No | `2000` (ms) | Distributed lock TTL |
-| `TRANSACTION_REDIS_BACKOFF` | No | `10` (ms) | Lock retry backoff |
+
+| Var                              | Required   | Default     | Purpose                                                                                                                                                    |
+| -------------------------------- | ---------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `APP_NAME`                       | Yes        | `""`        | Service name (used in Sentry, logs)                                                                                                                        |
+| `APP_ENV`                        | Yes        | `""`        | `develop` / `staging` / `production`                                                                                                                       |
+| `REDIS_HOST`                     | For Redis  | `""`        | Redis server                                                                                                                                               |
+| `REDIS_PORT`                     | For Redis  | `6379`      | Redis port                                                                                                                                                 |
+| `REDIS_PASSWORD`                 | No         | `""`        | Redis auth                                                                                                                                                 |
+| `SENTRY_DSN`                     | For Sentry | `""`        | Sentry project DSN (validated in `InitializeApp`; empty disables Sentry)                                                                                   |
+| `SENTRY_LOGGING`                 | No         | `false`     | Enable structured logging to Sentry (all log levels)                                                                                                       |
+| `SENTRY_DEBUG`                   | No         | `false`     | **Not read by this library.** Services pass `Debug: os.Getenv("SENTRY_DEBUG") == "true"` into `InitSentry` if desired; controls SDK diagnostics verbosity. |
+| `LOG_FORWARD_FATAL`              | No         | `true`      | Forward Fatal → Sentry (legacy; use `SENTRY_LOGGING` instead)                                                                                              |
+| `LOG_FORWARD_ERROR`              | No         | `true`      | Forward Error → Sentry (legacy; use `SENTRY_LOGGING` instead)                                                                                              |
+| `LOG_FORWARD_WARN`               | No         | `false`     | Forward Warn → Sentry (legacy; use `SENTRY_LOGGING` instead)                                                                                               |
+| `LOG_FORWARD_INFO`               | No         | `false`     | Forward Info → Sentry (legacy; use `SENTRY_LOGGING` instead)                                                                                               |
+| `TRANSACTION_REDIS_LOCK_TIMEOUT` | No         | `2000` (ms) | Distributed lock TTL                                                                                                                                       |
+| `TRANSACTION_REDIS_BACKOFF`      | No         | `10` (ms)   | Lock retry backoff                                                                                                                                         |
+
 
 ---
 
@@ -398,14 +479,16 @@ Unit tests cover helpers, headers, configuration, response handling, Redis optio
 
 **Options:**
 
-| Option | Description |
-|--------|-------------|
-| `-v`, `--verbose` | Verbose test output |
-| `-race` | Run with race detector (required for concurrency-related changes) |
-| `-cover` | Print coverage per package |
-| `-coverprofile` | Write `coverage.out` and print `go tool cover -func` summary |
-| `-short` | Skip long-running tests |
-| `-h`, `--help` | Show usage |
+
+| Option            | Description                                                       |
+| ----------------- | ----------------------------------------------------------------- |
+| `-v`, `--verbose` | Verbose test output                                               |
+| `-race`           | Run with race detector (required for concurrency-related changes) |
+| `-cover`          | Print coverage per package                                        |
+| `-coverprofile`   | Write `coverage.out` and print `go tool cover -func` summary      |
+| `-short`          | Skip long-running tests                                           |
+| `-h`, `--help`    | Show usage                                                        |
+
 
 **Examples:**
 
@@ -427,7 +510,7 @@ make test-coverage-check COVERAGE_MIN=90   # enforce 90% when the suite is ready
 make test-coverage-integration   # optional: same merged -coverpkg without -short
 ```
 
-`COVERAGE_PKGS` defaults to all packages from `go list ./...` **except** `phaudittrailv0` (legacy dial-heavy) and **`sdk/shared/*`** (doc-only placeholder packages). Use `COVERAGE_PKGS=./...` to include everything in the merged profile.
+`COVERAGE_PKGS` defaults to all packages from `go list ./...` **except** `phaudittrailv0` (legacy dial-heavy) and `**sdk/shared/*`** (doc-only placeholder packages). Use `COVERAGE_PKGS=./...` to include everything in the merged profile.
 
 **Without the script:**
 
@@ -458,21 +541,21 @@ make help
 To confirm the library is working correctly and all tested behaviour passes:
 
 1. **Build** — compiles without errors:
-   ```bash
+  ```bash
    go build ./...
-   ```
+  ```
 2. **Vet** — no suspicious constructs:
-   ```bash
+  ```bash
    go vet ./...
-   ```
+  ```
 3. **Tests** — all unit tests pass:
-   ```bash
+  ```bash
    go test ./...
-   ```
+  ```
 4. **Race detector** (recommended for concurrency-related changes):
-   ```bash
+  ```bash
    go test -race ./...
-   ```
+  ```
 
 One-liner from repo root:
 
@@ -481,6 +564,37 @@ go build ./... && go vet ./... && go test ./...
 ```
 
 Or use the script: `./scripts/run_tests.sh` (add `-race` for race detection).
+
+---
+
+## Consumer Migration (v2.0.0 / Redis v9)
+
+`paycloudhelper` v2.0.0 introduces a major dependency alignment on `github.com/redis/go-redis/v9`.
+Consumer services should treat this as a coordinated migration, not only a module bump.
+
+### Migration Checklist for Consumer Services
+
+1. Update module dependency:
+   ```bash
+   go get bitbucket.org/paycloudid/paycloudhelper@v2.0.0
+   go mod tidy
+   ```
+2. Replace direct Redis imports from `github.com/go-redis/redis/v8` to `github.com/redis/go-redis/v9`.
+3. Keep startup initialization through `InitializeRedisWithRetry` and preserve key naming conventions.
+4. Re-run service validation gates:
+   - `go build ./...`
+   - `go vet ./...`
+   - `go test ./...`
+   - `go test -race ./...`
+
+### Migration Skills for Services
+
+Use these skill packs from this repository as migration playbooks:
+
+- `.agents/skills/redis-v9-consumer-migration-core/`
+- `.agents/skills/redis-v9-consumer-migration-echo-api/`
+- `.agents/skills/redis-v9-consumer-migration-worker/`
+- `.agents/skills/redis-v9-consumer-migration-scheduler/`
 
 ---
 
@@ -505,11 +619,13 @@ Pipeline config: `bitbucket-pipelines.yml` in the repo root.
 
 ## Versioning
 
-| Bump | When |
-|------|------|
-| **PATCH** | Bug fixes, zero behavior change |
-| **MINOR** | New backward-compatible features |
+
+| Bump      | When                                                          |
+| --------- | ------------------------------------------------------------- |
+| **PATCH** | Bug fixes, zero behavior change                               |
+| **MINOR** | New backward-compatible features                              |
 | **MAJOR** | Breaking changes — requires coordinating all consumer updates |
+
 
 ---
 
@@ -538,6 +654,12 @@ make proto.service.scaffold SERVICE=clientpg
 ```
 
 ---
+
+## Automation Prompts
+
+- `prompt-migrate-bitbucket-pipelines-to-github-actions.md`
+  - Reads `bitbucket-pipelines.yml` and generates an equivalent GitHub Actions workflow.
+  - Preserves build/vet/test/coverage gates and branch triggers.
 
 ## Contributing
 

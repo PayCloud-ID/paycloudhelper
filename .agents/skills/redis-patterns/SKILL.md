@@ -1,8 +1,8 @@
 ---
-
-## name: redis-patterns
+name: redis-patterns
 description: Guides Redis initialization, store/get operations, distributed lock patterns, and key conventions in paycloudhelper.
 applyTo: '**/redis*.go, **/mutex.go'
+---
 
 # Redis Patterns — paycloudhelper
 

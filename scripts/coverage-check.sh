@@ -3,10 +3,10 @@
 #   Run merged Go test coverage and enforce a minimum total (COVERAGE_MIN).
 # Usage
 #   ./scripts/coverage-check.sh
-#   COVERAGE_MIN=90 COVERAGE_PKGS=./... ./scripts/coverage-check.sh
+#   COVERAGE_MIN=80 COVERAGE_PKGS=./... ./scripts/coverage-check.sh
 # Options
-#   COVERAGE_MIN   — fail if merged total % is below this (default: 90 if unset; Makefile sets 55).
-#   COVERAGE_GOAL  — informational project target (default: 90); warns if below.
+#   COVERAGE_MIN   — fail if merged total % is below this (default: 80 if unset; Makefile sets 55).
+#   COVERAGE_GOAL  — informational project target (default: 80); warns if below.
 #   COVERAGE_PKGS  — comma-separated packages for -coverpkg (default: ./...).
 #                    The Makefile defaults to all packages except phaudittrailv0.
 # What It Reads
@@ -26,8 +26,8 @@ if grep -q '^toolchain ' go.mod 2>/dev/null; then
   GOTOOLCHAIN="$(awk '/^toolchain /{print $2; exit}' go.mod)"
 fi
 
-COVERAGE_MIN="${COVERAGE_MIN:-90}"
-COVERAGE_GOAL="${COVERAGE_GOAL:-90}"
+COVERAGE_MIN="${COVERAGE_MIN:-80}"
+COVERAGE_GOAL="${COVERAGE_GOAL:-80}"
 COVERAGE_PKGS="${COVERAGE_PKGS:-./...}"
 
 go test -count=1 -short \

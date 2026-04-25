@@ -147,7 +147,7 @@ for transaction audit. Supports enable/disable via first parameter and reuses ex
 functional options.
 - `**LogAuditTrailTrx(data AuditTrailTrx)`**: One-call audit publishing. Auto-sets `Service`
 from `AppName` and `EventTime` from `time.Now()`. Requires at least one of `ReffNo`/`OrderNo`.
-- `**IsAuditTrailTrxEnabled()` / `GetAuditTrailTrxPublisher()**`: Status checks and lifecycle access.
+- `**IsAuditTrailTrxEnabled()` / `GetAuditTrailTrxPublisher()`**: Status checks and lifecycle access.
 - **Unit tests** (`audittrail_trx_test.go`): Entity constants, publisher setup, enable/disable,
 correlation validation, auto-defaults, metadata passthrough, concurrent safety, unique IDs.
 
@@ -167,7 +167,7 @@ correlation validation, auto-defaults, metadata passthrough, concurrent safety, 
 - `**AuditPublisher` worker pool** (`audittrail_publisher.go`): Production-grade audit publishing with bounded concurrency (default 10 workers), buffered channel (default 1000), circuit breaker (10 failures → 30s cooldown), and configurable message TTL. Functional options: `WithWorkerCount`, `WithBufferSize`, `WithMaxRetries`, `WithPublishTimeout`, `WithMessageTTL`, `WithCircuitBreakerThreshold`, `WithCircuitBreakerCooldown`.
 - `**SetUpAuditTrailPublisher()`** (`audittrail_v2.go`): New setup function that creates AMQP client + worker pool. Existing `SetUpRabbitMq` unchanged — services migrate at their own pace.
 - `**LogAudittrailDataV2()` / `LogAudittrailProcessV2()`** (`audittrail_v2.go`): Worker-pool-based V2 audit functions. Fall back to legacy V1 goroutine-per-call behavior when publisher is nil.
-- `**GetAuditPublisher()**`: Returns the package-level `AuditPublisher` for lifecycle management.
+- `**GetAuditPublisher()`**: Returns the package-level `AuditPublisher` for lifecycle management.
 - **Unit tests**
   - Root package: `LockError` (`Error`, `Unwrap`), Redis options (`InitRedisOptions`, `GetTrxRedisBackoff`, `GetTrxRedisLockTimeout`, `GetRedisPoolClient` when not initialized), mutex map (`StoreMutex`, `GetMutex`, `RemoveMutex`), init/app env (`SetAppName`, `SetAppEnv`, `GetAppName`, `GetAppEnv`, `InitializeApp`), validator constants and header validation (idem key, CSRF), `LoggerErrorHub`.
   - `phhelper`: globenv (Get/Set app name and env), helpers (`JsonMinify`, `JsonMarshalNoEsc`, `JSONEncode`, `ToJson`, `ToJsonIndent`).
@@ -193,7 +193,7 @@ correlation validation, auto-defaults, metadata passthrough, concurrent safety, 
 
 - **Sentry section naming/clarity**: README now distinguishes `Sentry Error Tracking` from `Sentry Structured Logging`, with explicit guidance that `SENTRY_DEBUG` affects SDK diagnostics only (not log forwarding) and `SENTRY_LOGGING` controls structured log forwarding.
 - **S3MinIO SDK runtime ownership**: `sdk/services/s3minio/{helper,grpc,http,pb}` now contains direct implementations and tests; runtime no longer depends on legacy package forwarding.
-- **Proto tooling paths**: S3MinIO proto update/generation/drift scripts now target only `sdk/services/s3minio/*` paths.
+- **Proto tooling paths**: S3MinIO proto update/generation/drift scripts now target only `sdk/services/s3minio/`* paths.
 - **S3MinIO proto snapshot** (`sdk/services/s3minio/proto/s3minio.proto`): Re-synced with `paycloud-be-s3minio-manager/proto/s3minio.proto` (comments, field docs, service documentation; no wire changes).
 - **S3MinIO proto scripts** (`scripts/proto/update-s3minio-proto.sh`, `gen-s3minio-client.sh`, `check-stub-drift.sh`): `S3MINIO_MANAGER_PROTO` overrides the default manager path; update skips when the source file is missing (e.g. CI without a checkout); `gen-s3minio-client.sh` validates the hand-maintained `pb/client.go` surface via `go test` instead of invoking `protoc` with an incompatible `go_package` output layout; drift detection compares the proto checksum before and after refresh instead of diffing `pb/client.go`.
 - `**buf.yaml`**: Lint rules scoped to the `sdk/services/s3minio/proto` module with `STANDARD` minus layout/RPC-naming rules that conflict with the internal parity proto (same wire contract as production).
