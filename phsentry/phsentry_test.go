@@ -69,6 +69,24 @@ func TestGetSentryDataMap_ReturnsNilWhenNoData(t *testing.T) {
 	}
 }
 
+func TestGetSentryDataMap_ReturnsMergedDataWhenPresent(t *testing.T) {
+	prev := sentryBreadcrumbData
+	defer func() { sentryBreadcrumbData = prev }()
+
+	sentryBreadcrumbData = &SentryData{
+		Service:  "svc",
+		Module:   "mod",
+		Function: "fn",
+	}
+	m := GetSentryDataMap()
+	if m == nil {
+		t.Fatal("expected non-nil map when breadcrumb data is set")
+	}
+	if m["service"] != "svc" || m["module"] != "mod" || m["function"] != "fn" {
+		t.Fatalf("unexpected map contents: %#v", m)
+	}
+}
+
 func TestNewSentryData_HandlesNilInput(t *testing.T) {
 	NewSentryData(nil)
 }
@@ -88,6 +106,29 @@ func TestInitSentryOptions_EnableLogsDefaultTrue(t *testing.T) {
 	}
 	if !sentryClientOptions.EnableLogs {
 		t.Fatal("InitSentryOptions should enable structured logs by default")
+	}
+}
+
+func TestInitSentryOptions_MergesAdditionalOptions(t *testing.T) {
+	prev := sentryClientOptions
+	defer func() { sentryClientOptions = prev }()
+
+	InitSentryOptions(SentryOptions{
+		Dsn: "https://examplePublicKey@o0.ingest.sentry.io/0",
+		Options: &sentry.ClientOptions{
+			ServerName:  "unit-test",
+			Environment: "override-env",
+		},
+	})
+
+	if sentryClientOptions == nil {
+		t.Fatal("expected sentryClientOptions to be initialized")
+	}
+	if sentryClientOptions.ServerName != "unit-test" {
+		t.Fatalf("ServerName=%q want unit-test", sentryClientOptions.ServerName)
+	}
+	if sentryClientOptions.Environment != "override-env" {
+		t.Fatalf("Environment=%q want override-env", sentryClientOptions.Environment)
 	}
 }
 
@@ -253,6 +294,12 @@ func (c *captureTransport) SendEvent(event *sentry.Event) {
 
 func (c *captureTransport) Close() {}
 
+func (c *captureTransport) count() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.events)
+}
+
 func TestReceiveLog_WithClient_CapturesLevels(t *testing.T) {
 	prevC := sentryClient
 	prevO := sentryClientOptions
@@ -322,5 +369,108 @@ func TestSendToSentryCapturePaths_WithClient(t *testing.T) {
 	tr.mu.Unlock()
 	if n < 5 {
 		t.Fatalf("expected at least 5 captured events, got %d", n)
+	}
+}
+
+func TestSendToSentry_DirectDispatchAndGuards(t *testing.T) {
+	prevC := sentryClient
+	prevO := sentryClientOptions
+	prevD := sentryBreadcrumbData
+	defer func() {
+		sentryClient = prevC
+		sentryClientOptions = prevO
+		sentryBreadcrumbData = prevD
+	}()
+
+	tr := &captureTransport{}
+	client, err := sentry.NewClient(sentry.ClientOptions{
+		Dsn:       "http://public@example.com/1",
+		Transport: tr,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	sentryClient = client
+
+	// Exercise early-return guards.
+	sendToSentry(nil, "message", "svc", "mod", "fn")
+	sendToSentry("", "message", "svc", "mod", "fn")
+	if tr.count() != 0 {
+		t.Fatalf("expected 0 events after nil/empty message guards, got %d", tr.count())
+	}
+
+	// Exercise dispatch type-guards.
+	sendToSentry(errors.New("dbg"), "debug", "svc", "mod", "fn")
+	sendToSentry(errors.New("warn"), "warning", "svc", "mod", "fn")
+	sendToSentry("hello", "message", "svc", "mod", "fn")
+	sendToSentry(&sentry.Event{Message: "ev"}, "event", "svc", "mod", "fn")
+	if tr.count() < 4 {
+		t.Fatalf("expected at least 4 captured events, got %d", tr.count())
+	}
+
+	// msgType "error" is an explicit case with no-op body; keep behavior stable but cover the branch.
+	before := tr.count()
+	sendToSentry(errors.New("err"), "error", "svc", "mod", "fn")
+	if tr.count() != before {
+		t.Fatalf("expected msgType=error to not capture; before=%d after=%d", before, tr.count())
+	}
+}
+
+func TestSendSentryErrorWithContext_UsesHubFromContext(t *testing.T) {
+	prevC := sentryClient
+	prevO := sentryClientOptions
+	prevD := sentryBreadcrumbData
+	defer func() {
+		sentryClient = prevC
+		sentryClientOptions = prevO
+		sentryBreadcrumbData = prevD
+	}()
+
+	// Global client must be non-nil to pass the guard.
+	globalClient, err := sentry.NewClient(sentry.ClientOptions{Dsn: "http://public@example.com/1", Transport: &captureTransport{}})
+	if err != nil {
+		t.Fatalf("NewClient(global): %v", err)
+	}
+	sentryClient = globalClient
+
+	// Context hub client uses a capture transport so we can assert capture happened via that hub.
+	tr := &captureTransport{}
+	ctxClient, err := sentry.NewClient(sentry.ClientOptions{Dsn: "http://public@example.com/1", Transport: tr})
+	if err != nil {
+		t.Fatalf("NewClient(ctx): %v", err)
+	}
+	hub := sentry.NewHub(ctxClient, sentry.NewScope())
+	ctx := sentry.SetHubOnContext(context.Background(), hub)
+
+	// Ensure breadcrumb path is exercised too.
+	sentryBreadcrumbData = &SentryData{Service: "svc", Module: "mod", Function: "fn"}
+
+	SendSentryErrorWithContext(ctx, errors.New("boom"))
+	if tr.count() == 0 {
+		t.Fatal("expected at least one event captured via hub from context")
+	}
+}
+
+func TestSendSentryErrorWithContext_NoHubCreatesHub(t *testing.T) {
+	prevC := sentryClient
+	prevO := sentryClientOptions
+	prevD := sentryBreadcrumbData
+	defer func() {
+		sentryClient = prevC
+		sentryClientOptions = prevO
+		sentryBreadcrumbData = prevD
+	}()
+
+	tr := &captureTransport{}
+	client, err := sentry.NewClient(sentry.ClientOptions{Dsn: "http://public@example.com/1", Transport: tr})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	sentryClient = client
+	sentryBreadcrumbData = &SentryData{Service: "svc", Module: "mod", Function: "fn"}
+
+	SendSentryErrorWithContext(context.Background(), errors.New("boom"))
+	if tr.count() == 0 {
+		t.Fatal("expected at least one event captured when context has no hub")
 	}
 }

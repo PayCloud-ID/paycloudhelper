@@ -3,7 +3,8 @@
 	buf.lint \
 	proto.s3minio.update proto.s3minio.gen proto.s3minio.lint proto.s3minio.breaking proto.s3minio.check proto.service.scaffold \
 	ci.check.direct-http ci.check.stub-drift \
-	test-go test-coverage test-coverage-check coverage-inventory test-coverage-integration
+	test-go test-coverage test-coverage-check coverage-inventory test-coverage-integration \
+	test-coverage-handwritten test-coverage-check-handwritten coverage-inventory-handwritten
 
 BUF ?= buf
 
@@ -13,6 +14,14 @@ BUF ?= buf
 COVERAGE_GOAL ?= 90
 COVERAGE_MIN ?= 65
 COVERAGE_PKGS ?= $(shell go list ./... | grep -Fv '/phaudittrailv0' | grep -Fv '/sdk/shared/' | tr '\n' ',' | sed 's/,$$//')
+
+# Handwritten-only merged coverage: excludes generated protobuf/wirepb packages from -coverpkg.
+# Intended for confidence-driven targets like "85% handwritten coverage".
+# Note: this excludes the *package* `sdk/services/s3minio/pb/wirepb` entirely.
+COVERAGE_PKGS_HANDWRITTEN ?= $(shell go list ./... | \
+	grep -Fv '/sdk/shared/' | \
+	grep -Fv '/sdk/services/s3minio/pb/wirepb' | \
+	tr '\n' ',' | sed 's/,$$//')
 
 GOTOOLCHAIN_VAL := $(shell awk '/^toolchain /{print $$2; exit}' go.mod)
 ifneq ($(GOTOOLCHAIN_VAL),)
@@ -58,6 +67,18 @@ test-coverage-check: ## Fail if merged coverage < COVERAGE_MIN (goal COVERAGE_GO
 
 coverage-inventory: ## Merged coverage + grouped inventory (writes coverage.out, coverage-func.txt)
 	@COVERAGE_PKGS=$(COVERAGE_PKGS) ./scripts/coverage-inventory.sh
+
+test-coverage-handwritten: ## Print merged coverage (COVERAGE_PKGS_HANDWRITTEN); summary tail
+	go test -count=1 -short -coverprofile=coverage.out -covermode=atomic \
+		-coverpkg=$(COVERAGE_PKGS_HANDWRITTEN) \
+		./...
+	go tool cover -func=coverage.out | tail -25
+
+test-coverage-check-handwritten: ## Fail if merged handwritten coverage < COVERAGE_MIN (goal COVERAGE_GOAL)
+	@COVERAGE_MIN=$(COVERAGE_MIN) COVERAGE_GOAL=$(COVERAGE_GOAL) COVERAGE_PKGS=$(COVERAGE_PKGS_HANDWRITTEN) ./scripts/coverage-check.sh
+
+coverage-inventory-handwritten: ## Merged handwritten coverage + grouped inventory (writes coverage.out, coverage-func.txt)
+	@COVERAGE_PKGS=$(COVERAGE_PKGS_HANDWRITTEN) ./scripts/coverage-inventory.sh
 
 test-coverage-integration: ## Same as test-coverage but without -short (optional CI / nightly)
 	go test -count=1 -coverprofile=coverage-integration.out -covermode=atomic \
