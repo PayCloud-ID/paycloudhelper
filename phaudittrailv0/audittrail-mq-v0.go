@@ -22,6 +22,34 @@ var Conn *amqp.Connection
 var Channel *amqp.Channel
 var Que *string
 
+// Test hooks (default to real implementations). These allow deterministic unit tests
+// without a live RabbitMQ and without long sleeps.
+var auditV0DialHook = amqp.DialConfig
+var auditV0AfterHook = time.After
+var auditV0ChannelHook = func(conn *amqp.Connection) (*amqp.Channel, error) { return conn.Channel() }
+var auditV0ChannelCloseHook = func(ch *amqp.Channel) error { return ch.Close() }
+var auditV0ConnCloseHook = func(conn *amqp.Connection) error { return conn.Close() }
+
+var auditV0QueuePassiveHook = func(ch *amqp.Channel, name string) (amqp.Queue, error) {
+	return ch.QueueDeclarePassive(name, true, false, false, false, nil)
+}
+var auditV0QueueDeclareHook = func(ch *amqp.Channel, name string) (amqp.Queue, error) {
+	return ch.QueueDeclare(name, true, false, false, false, nil)
+}
+var auditV0PublishHook = func(ch *amqp.Channel, queueName string, body []byte) error {
+	return ch.Publish("", queueName, false, false, amqp.Publishing{
+		ContentType: "text/plain",
+		Body:        body,
+		Expiration:  "60000",
+	})
+}
+
+// auditV0MaxTrialsForTest, when > 0, caps retry loops in startRQConnection (tests only).
+var auditV0MaxTrialsForTest int
+
+// auditV0ReturnChannelErrorForTest, when true, startRQConnection returns the channel error instead of panicking (tests only).
+var auditV0ReturnChannelErrorForTest bool
+
 // SetUpRabbitMq service must call this func in main function
 // NOTE : for audittrail purpose
 func SetUpRabbitMq(host, port, vhost, username, password, auditTrailQue, appName string) RMqAutoConnect {
@@ -72,16 +100,19 @@ func (r *RMqAutoConnect) startRQConnection() (conn *amqp.Connection, ch *amqp.Ch
 	retry := 0
 	for {
 		retry++
-		r.conn, err = amqp.DialConfig(r.uriConnection, cfg)
+		if auditV0MaxTrialsForTest > 0 && retry > auditV0MaxTrialsForTest {
+			return nil, nil, err
+		}
+		r.conn, err = auditV0DialHook(r.uriConnection, cfg)
 		if err != nil {
 			// retry connect to rabbit by sleep time
 			switch {
 			case retry <= maxTrialSecond:
 				phlogger.LogI("%s reconnect delay=30s", phhelper.BuildLogPrefix("startRQConnection"))
-				<-time.After(time.Duration(30) * time.Second)
+				<-auditV0AfterHook(time.Duration(30) * time.Second)
 			case retry <= maxTrialMinute:
 				phlogger.LogI("%s reconnect delay=10m", phhelper.BuildLogPrefix("startRQConnection"))
-				<-time.After(time.Duration(10) * time.Minute)
+				<-auditV0AfterHook(time.Duration(10) * time.Minute)
 			default:
 				// send notif to sentry
 			}
@@ -95,9 +126,12 @@ func (r *RMqAutoConnect) startRQConnection() (conn *amqp.Connection, ch *amqp.Ch
 	//declare channel
 	phlogger.LogI("%s opening channel", phhelper.BuildLogPrefix("startRQConnection"))
 
-	r.ch, err = r.conn.Channel()
+	r.ch, err = auditV0ChannelHook(r.conn)
 	if err != nil {
 		r.reset()
+		if auditV0ReturnChannelErrorForTest {
+			return nil, nil, err
+		}
 		log.Panicln(err.Error())
 	}
 
@@ -111,24 +145,16 @@ func (r *RMqAutoConnect) reset() {
 	Conn = nil
 	Channel = nil
 	Que = nil
-
-	if err := r.ch.Close(); err != nil {
-		return
+	if r.ch != nil {
+		_ = auditV0ChannelCloseHook(r.ch)
 	}
-	if err := r.conn.Close(); err != nil {
-		return
+	if r.conn != nil {
+		_ = auditV0ConnCloseHook(r.conn)
 	}
 }
 
 func checkIfQueueExists(channel *amqp.Channel, queueName string) (bool, error) {
-	_, err := channel.QueueDeclarePassive(
-		queueName,
-		true,  // durable
-		false, // delete when unused
-		false, // exclusive
-		false, // no-wait
-		nil,   // arguments
-	)
+	_, err := auditV0QueuePassiveHook(channel, queueName)
 
 	if err != nil {
 		// queue does not exists
@@ -157,14 +183,7 @@ func PushMessage(data interface{}) {
 	// declare que if does not exists
 	if queueExists, _ := checkIfQueueExists(Channel, *Que); !queueExists {
 		// declaring creates a queue if it doesn't already exist, or ensures that an existing queue matches the same parameters.
-		_, err = Channel.QueueDeclare(
-			*Que,
-			true,
-			false,
-			false,
-			false,
-			nil,
-		)
+		_, err = auditV0QueueDeclareHook(Channel, *Que)
 		if err != nil {
 			// TODO : send sentry error
 			phlogger.LogE("%s declaring queue failed err=%v", phhelper.BuildLogPrefix("PushMessage"), err)
@@ -172,17 +191,7 @@ func PushMessage(data interface{}) {
 		}
 	}
 
-	err = Channel.Publish(
-		"",
-		*Que,
-		false,
-		false,
-		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        msgBytes,
-			Expiration:  "60000",
-		},
-	)
+	err = auditV0PublishHook(Channel, *Que, msgBytes)
 
 	if err != nil {
 		// TODO : send sentry error

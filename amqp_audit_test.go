@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -529,5 +532,140 @@ func TestAmqpClient_Close_ConnHookError(t *testing.T) {
 	err := c.Close()
 	if err == nil || err.Error() != "conn close" {
 		t.Fatalf("Close err=%v", err)
+	}
+}
+
+func TestAmqpClient_handleReInit_reRunsInitOnChannelClose(t *testing.T) {
+	c := &AmqpClient{
+		m:               &sync.Mutex{},
+		done:            make(chan bool),
+		infoLog:         log.New(io.Discard, "", 0),
+		errLog:          log.New(io.Discard, "", 0),
+		notifyConnClose: make(chan *amqp.Error, 1),
+		notifyChanClose: make(chan *amqp.Error, 1),
+	}
+
+	var calls atomic.Int32
+	c.initForTest = func(_ *amqp.Connection) error {
+		calls.Add(1)
+		c.m.Lock()
+		c.isReady = true
+		c.m.Unlock()
+		return nil
+	}
+
+	go func() {
+		// After first successful init, simulate a channel close to exercise the
+		// "re-running init" select branch, then stop.
+		for calls.Load() < 1 {
+			time.Sleep(1 * time.Millisecond)
+		}
+		c.notifyChanClose <- &amqp.Error{Code: 504, Reason: "chan closed"}
+		for calls.Load() < 2 {
+			time.Sleep(1 * time.Millisecond)
+		}
+		close(c.done)
+	}()
+
+	if done := c.handleReInit(nil); !done {
+		t.Fatal("expected handleReInit to return true after done closed")
+	}
+	if calls.Load() < 2 {
+		t.Fatalf("init calls=%d want >=2", calls.Load())
+	}
+}
+
+func TestAmqpClient_handleReInit_returnsFalseOnConnCloseSignal(t *testing.T) {
+	c := &AmqpClient{
+		m:               &sync.Mutex{},
+		done:            make(chan bool),
+		infoLog:         log.New(io.Discard, "", 0),
+		errLog:          log.New(io.Discard, "", 0),
+		notifyConnClose: make(chan *amqp.Error, 1),
+		notifyChanClose: make(chan *amqp.Error, 1),
+	}
+	c.initForTest = func(_ *amqp.Connection) error { return nil }
+
+	go func() {
+		time.Sleep(3 * time.Millisecond)
+		c.notifyConnClose <- &amqp.Error{Code: 320, Reason: "conn closed"}
+	}()
+
+	if done := c.handleReInit(nil); done {
+		t.Fatal("expected handleReInit to return false on notifyConnClose signal")
+	}
+}
+
+// TestNewAmqp_nonNilClient_retriesDialWithTestBackoff exercises handleReconnect's
+// dial-failure loop without waiting for production reconnectDelay.
+func TestNewAmqp_nonNilClient_retriesDialWithTestBackoff(t *testing.T) {
+	prevDial := amqpDialHook
+	prevBackoff := amqpReconnectDelayForTest
+	var c *AmqpClient
+	t.Cleanup(func() {
+		amqpDialHook = prevDial
+		amqpReconnectDelayForTest = prevBackoff
+		if c != nil {
+			select {
+			case <-c.done:
+			default:
+				close(c.done)
+			}
+		}
+	})
+
+	var dials atomic.Int32
+	amqpDialHook = func(string, amqp.Config) (*amqp.Connection, error) {
+		dials.Add(1)
+		return nil, errors.New("no broker")
+	}
+	amqpReconnectDelayForTest = 4 * time.Millisecond
+
+	c = defaultAmqpClient()
+	c.queueName = "q"
+	c.SetAmqpConfig(defaultAmqpConfig())
+	NewAmqp("amqp://127.0.0.1:59999/", c)
+
+	deadline := time.Now().Add(200 * time.Millisecond)
+	for dials.Load() < 2 {
+		if time.Now().After(deadline) {
+			t.Fatalf("dial attempts=%d want at least 2", dials.Load())
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+}
+
+// TestNewAmqpClient_retriesDialWithTestBackoff mirrors NewAmqp for the constructor path.
+func TestNewAmqpClient_retriesDialWithTestBackoff(t *testing.T) {
+	prevDial := amqpDialHook
+	prevBackoff := amqpReconnectDelayForTest
+	var c *AmqpClient
+	t.Cleanup(func() {
+		amqpDialHook = prevDial
+		amqpReconnectDelayForTest = prevBackoff
+		if c != nil {
+			select {
+			case <-c.done:
+			default:
+				close(c.done)
+			}
+		}
+	})
+
+	var dials atomic.Int32
+	amqpDialHook = func(string, amqp.Config) (*amqp.Connection, error) {
+		dials.Add(1)
+		return nil, errors.New("no broker")
+	}
+	amqpReconnectDelayForTest = 4 * time.Millisecond
+
+	c = NewAmqpClient("q", "c", "amqp://127.0.0.1:59999/", defaultAmqpConfig())
+
+	deadline := time.Now().Add(200 * time.Millisecond)
+	for dials.Load() < 2 {
+		if time.Now().After(deadline) {
+			t.Fatalf("dial attempts=%d want at least 2", dials.Load())
+		}
+		time.Sleep(2 * time.Millisecond)
 	}
 }

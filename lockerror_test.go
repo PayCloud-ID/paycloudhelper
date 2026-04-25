@@ -56,4 +56,3 @@ func TestLockError_Unwrap(t *testing.T) {
 		t.Errorf("Unwrap() with nil Err = %v, want nil", got)
 	}
 }
-

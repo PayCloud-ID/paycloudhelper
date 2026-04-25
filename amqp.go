@@ -56,6 +56,10 @@ type AmqpClient struct {
 	// ccChannelCloseForTest / ccConnCloseForTest replace Close in Cc when set (package tests only).
 	ccChannelCloseForTest func() error
 	ccConnCloseForTest    func() error
+
+	// initForTest, when set, replaces init(conn) during reconnect loops (package tests only).
+	// It allows testing handleReInit success branches without a live broker.
+	initForTest func(conn *amqp.Connection) error
 }
 
 func (c *AmqpClient) ConnName() string {
@@ -112,6 +116,36 @@ var (
 
 // amqpDialHook connects to the broker. Package tests may replace it to avoid real TCP dials.
 var amqpDialHook = defaultAmqpDial
+
+// amqpReconnectDelayForTest, when > 0, replaces reconnectDelay after failed dials (tests only).
+var amqpReconnectDelayForTest time.Duration
+
+// amqpReinitDelayForTest, when > 0, replaces reInitDelay in handleReInit retry loops (tests only).
+var amqpReinitDelayForTest time.Duration
+
+// amqpResendDelayForTest, when > 0, replaces resendDelay between Push retries (tests only).
+var amqpResendDelayForTest time.Duration
+
+func amqpReconnectSleep() time.Duration {
+	if amqpReconnectDelayForTest > 0 {
+		return amqpReconnectDelayForTest
+	}
+	return reconnectDelay
+}
+
+func amqpReinitSleep() time.Duration {
+	if amqpReinitDelayForTest > 0 {
+		return amqpReinitDelayForTest
+	}
+	return reInitDelay
+}
+
+func amqpResendSleep() time.Duration {
+	if amqpResendDelayForTest > 0 {
+		return amqpResendDelayForTest
+	}
+	return resendDelay
+}
 
 func defaultAmqpDial(addr string, cfg amqp.Config) (*amqp.Connection, error) {
 	return amqp.DialConfig(addr, cfg)
@@ -182,7 +216,7 @@ func (c *AmqpClient) handleReconnect(addr string) {
 			select {
 			case <-c.done:
 				return
-			case <-time.After(reconnectDelay):
+			case <-time.After(amqpReconnectSleep()):
 			}
 			continue
 		}
@@ -224,7 +258,7 @@ func (c *AmqpClient) handleReInit(conn *amqp.Connection) bool {
 			case <-c.notifyConnClose:
 				c.infoLog.Println("[AMQP] connection closed, reconnecting...")
 				return false
-			case <-time.After(reInitDelay):
+			case <-time.After(amqpReinitSleep()):
 			}
 			continue
 		}
@@ -270,6 +304,10 @@ func (c *AmqpClient) checkIfQueueExists(ch *amqp.Channel) (bool, error) {
 
 // init will initialize channel & declare queue
 func (c *AmqpClient) init(conn *amqp.Connection) error {
+	if c.initForTest != nil {
+		return c.initForTest(conn)
+	}
+
 	ch, err := conn.Channel()
 	if err != nil {
 		return err
@@ -355,7 +393,7 @@ func (c *AmqpClient) Push(data []byte) error {
 				return errShutdown
 			case <-deadline:
 				return fmt.Errorf("[AMQP] push timeout after %v: %w", PushTimeout, err)
-			case <-time.After(resendDelay):
+			case <-time.After(amqpResendSleep()):
 			}
 			continue
 		}
