@@ -1,0 +1,32 @@
+name: Branch Cleanup
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    name: Delete merged branches
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history so we can check merged branches
+
+      - name: Delete merged branches
+        run: |
+          # Fetch all branches from origin to make sure we have the latest remote tracking branches
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*'
+
+          # List all remote branches merged into main, excluding main, develop, and staging
+          for branch in $(git branch -r --merged origin/main | grep -v 'HEAD' | grep -v -E 'origin/(main|develop|staging)$' | sed 's/ *origin\///'); do
+            if [ -n "$branch" ]; then
+              echo "Deleting merged branch: $branch"
+              git push origin --delete "$branch" || echo "Failed to delete $branch"
+            fi
+          done

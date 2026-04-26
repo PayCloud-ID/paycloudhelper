@@ -31,6 +31,17 @@ pipelines:
       - step: *validate
     main:
       - step: *validate
+      - step:
+          name: Delete merged branches
+          script:
+            - git fetch origin '+refs/heads/*:refs/remotes/origin/*'
+            - |
+              for branch in $(git branch -r --merged origin/main | grep -v 'HEAD' | grep -v -E 'origin/(main|develop|staging)$' | sed 's/ *origin\///'); do
+                if [ -n "$branch" ]; then
+                  echo "Deleting merged branch: $branch"
+                  git push origin --delete "$branch" || echo "Failed to delete $branch"
+                fi
+              done
 
   # Optional: run the same checks on any other branch (e.g. feature branches)
   default:
