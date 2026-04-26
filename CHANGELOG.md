@@ -11,27 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Tests**: AMQP `queuePassiveForTest` hook + `checkIfQueueExists` coverage;
-`RabbitMQConnection` env wiring (`rmq_test.go`); `RevokeToken` JWT paths with
-RSA keypair, miniredis, and `revokeToken` Redis payloads; s3minio gRPC client
-nil-response and health/ready edge cases; `phtrace` `buildPrefix` with nil
-context; AMQP `Cc` close hooks; `phsentry` `SendToSentry*` with in-memory
-transport; `phtrace` `FromEnv` option setters, `LogContextCtx` methods, and
-`MustPhaseHistogram`; miniredis coverage for `InitializeRedis`, `GetRedisClient`,
-delete/store-with-lock and redsync lock helpers; `phtrace.Init` disabled path;
-`redis` lock contention handling for `ErrTaken`; concurrent `InitRedSyncOnce` /
-mutex map tests; s3minio HTTP success and error branches; `VerifCsrf` missing
-header; `phtrace.Propagator` / `Resource`; `ValidateConfiguration` with Redis
-options.
-
 ### Changed
 
-- Default merged coverage gate: `COVERAGE_MIN` raised to **65** in the Makefile
-and Bitbucket pipeline (merged statements ~71% with default `COVERAGE_PKGS`
-after redis locks, `phtrace.Init`, HTTP bridge tests, CSRF validation, and
-config validation with live Redis options).
-
-## [v2.0.0](https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.9.0..v2.0.0) - 2026-04-24
+## [v1.10.0](https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.9.0..v1.10.0) - 2026-04-24
 
 ### Changed (Breaking)
 
@@ -75,6 +57,25 @@ upload error path.
 paths, `CheckHealth` + Redis metrics with live miniredis, s3minio HTTP client
 branch tests, wirepb client `ChainUnaryInterceptor`, default `COVERAGE_PKGS`
 excludes `sdk/shared/*`, merged coverage ~63% with `COVERAGE_MIN` raised to 55.
+- **Tests**: AMQP `queuePassiveForTest` hook + `checkIfQueueExists` coverage;
+`RabbitMQConnection` env wiring (`rmq_test.go`); `RevokeToken` JWT paths with
+RSA keypair, miniredis, and `revokeToken` Redis payloads; s3minio gRPC client
+nil-response and health/ready edge cases; `phtrace` `buildPrefix` with nil
+context; AMQP `Cc` close hooks; `phsentry` `SendToSentry*` with in-memory
+transport; `phtrace` `FromEnv` option setters, `LogContextCtx` methods, and
+`MustPhaseHistogram`; miniredis coverage for `InitializeRedis`, `GetRedisClient`,
+delete/store-with-lock and redsync lock helpers; `phtrace.Init` disabled path;
+`redis` lock contention handling for `ErrTaken`; concurrent `InitRedSyncOnce` /
+mutex map tests; s3minio HTTP success and error branches; `VerifCsrf` missing
+header; `phtrace.Propagator` / `Resource`; `ValidateConfiguration` with Redis
+options.
+
+### Changed
+
+- Default merged coverage gate: `COVERAGE_MIN` raised to **65** in the Makefile
+and Bitbucket pipeline (merged statements ~71% with default `COVERAGE_PKGS`
+after redis locks, `phtrace.Init`, HTTP bridge tests, CSRF validation, and
+config validation with live Redis options).
 
 ## [v1.9.0](https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.8.1..v1.9.0) - 2026-04-22
 
@@ -133,6 +134,29 @@ behavior. All tests pass under `go test -race ./phtrace/...`.
 - New subpackage only. No existing symbols touched; services that do not
 import `bitbucket.org/paycloudid/paycloudhelper/phtrace` are unaffected.
 - Backward compatible (MINOR): SemVer MINOR bump to v1.9.0.
+
+## [v1.8.2] - 2026-04-23
+
+### Added
+
+- **Script documentation policy** (`.agents/rules/script-documentation.md`): Added a repository rule requiring a standard header in every shell script (`Purpose`, `Usage`, `Options`, `What It Reads`, `What It Affects / Does`, `Exit Behavior`).
+
+### Changed
+
+- **Script path portability** (`scripts/check-no-direct-s3minio-http.sh`, `scripts/proto/update-s3minio-proto.sh`): Replaced machine-specific absolute paths with relative defaults for local and CI usage.
+- **`scripts/generate-makefile.sh`**: Formalized CLI options (`--service-path`, `--dry-run`, `-h/--help`) and added optional post-generation sanity checks (`make -n help`, `bash -n run.sh`).
+- **`scripts/run_tests.sh`**: Tightened option handling (`-race`, `-cover`, `-coverprofile`, `-short`, `-v/--verbose`) and now prints `go tool cover -func` summary when `-coverprofile` is used.
+- **`scripts/proto/update-s3minio-proto.sh`**: Added `S3MINIO_MANAGER_PROTO` override and changed missing-source behavior to a non-failing skip.
+- **`scripts/proto/check-stub-drift.sh`**: Hardened CI drift checks by refreshing proto artifacts and failing when drift is detected.
+
+### Added (Internal)
+
+- **Agent instruction alignment** (`AGENTS.md`, `.github/copilot-instructions.md`): Added explicit references to the script-header documentation rule.
+
+### Changed (Internal)
+
+- **Script doc-header rollout** (`scripts/check-no-direct-s3minio-http.sh`, `scripts/generate-makefile.sh`, `scripts/run_tests.sh`, `scripts/proto/new-service-scaffold.sh`, `scripts/proto/update-s3minio-proto.sh`, `scripts/proto/gen-s3minio-client.sh`, `scripts/proto/check-stub-drift.sh`): Applied the standardized shell-script header format to touched scripts.
+- **Planning docs refresh** (`docs/plans/*`): Updated internal execution/planning documents to match script-policy and proto-workflow updates.
 
 ## [v1.8.1](https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.8.0-beta.2..v1.8.1) - 2026-04-19
 
@@ -233,3 +257,5 @@ correlation validation, auto-defaults, metadata passthrough, concurrent safety, 
 History before this changelog was introduced. See git tags and release notes for older versions.
 
 Retracted versions (do not use): v1.6.3, v1.6.0, v1.5.2 — see `go.mod` retract block.
+
+[v1.8.2]: https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.8.1..v1.8.2
