@@ -88,11 +88,48 @@ func ValidateConfiguration() []ConfigError {
 	}
 
 	// Validate RabbitMQ configuration (for audit trail)
-	rabbitMQURL := os.Getenv("RABBITMQ_URL")
-	if rabbitMQURL == "" {
+	// Check for required RabbitMQ component env vars used by SetUpRabbitMq()
+	rabbitMQHost := os.Getenv("RABBITMQ_HOST")
+	rabbitMQPort := os.Getenv("RABBITMQ_PORT")
+	rabbitMQVhost := os.Getenv("RABBITMQ_VIRTUAL_HOST_AUDITTRAIL")
+	rabbitMQUser := os.Getenv("RABBITMQ_USERNAME_AUDITTRAIL")
+	rabbitMQPass := os.Getenv("RABBITMQ_PASSWORD_AUDITTRAIL")
+	rabbitMQQueue := os.Getenv("RABBITMQ_QUEUE_AUDITTRAIL")
+
+	// Audit trail is optional - only warn if some but not all components are set
+	configuredCount := 0
+	if rabbitMQHost != "" {
+		configuredCount++
+	}
+	if rabbitMQPort != "" {
+		configuredCount++
+	}
+	if rabbitMQVhost != "" {
+		configuredCount++
+	}
+	if rabbitMQUser != "" {
+		configuredCount++
+	}
+	if rabbitMQPass != "" {
+		configuredCount++
+	}
+	if rabbitMQQueue != "" {
+		configuredCount++
+	}
+
+	totalComponents := 6
+	if configuredCount > 0 && configuredCount < totalComponents {
+		// Some but not all RabbitMQ vars are set - likely misconfiguration
 		errors = append(errors, ConfigError{
-			Field:   "RABBITMQ_URL",
-			Message: "RABBITMQ_URL not set - audit trail may not work",
+			Field:   "RabbitMQ",
+			Message: "RabbitMQ audit trail partially configured - audit trail may not work",
+			Level:   "warning",
+		})
+	} else if configuredCount == 0 {
+		// None set - audit trail disabled
+		errors = append(errors, ConfigError{
+			Field:   "RabbitMQ",
+			Message: "RabbitMQ audit trail not configured - audit trail disabled",
 			Level:   "warning",
 		})
 	}

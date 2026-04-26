@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.9.0] - 2026-04-22
+
+### Added
+
+- **New `phtrace` subpackage**: OpenTelemetry tracing and metrics helpers for
+  PayCloud services supporting Grafana Tempo/Loki/Prometheus backend via OTLP
+  gRPC.
+  - `phtrace.Config` + `FromEnv(opts ...Option)`: env-driven configuration with
+    functional options (`WithServiceName`, `WithServiceVersion`, `WithEndpoint`,
+    `WithInsecure`, `WithSamplingRatio`, `WithEnvironment`, `WithEnabled`,
+    `WithResourceAttribute`). Env vars: `OTEL_ENABLED`, `OTEL_SERVICE_NAME`,
+    `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_INSECURE`,
+    `OTEL_TRACES_SAMPLER_ARG`, `OTEL_DIAL_TIMEOUT`, `OTEL_BATCH_TIMEOUT`,
+    `OTEL_METRIC_EXPORT_INTERVAL`, `OTEL_RESOURCE_ATTRIBUTES`.
+  - `phtrace.Init(ctx, cfg) (Shutdown, error)`: one-shot initialization with
+    `sync.Once`, OTLP gRPC trace + metric exporters, parent-based trace
+    sampling, W3C TraceContext + Baggage propagation, `otel.SetErrorHandler`
+    wiring. Returns `Shutdown` closure safe to call multiple times.
+  - `phtrace.IsEnabled()`, `phtrace.Tracer(name)`, `phtrace.Meter(name)`,
+    `phtrace.Propagator()`, `phtrace.Resource()`: zero-cost helpers that
+    return no-op providers when OTel is disabled (so consumer code stays the
+    same in dev and prod).
+  - `phtrace.AMQPCarrier` + `InjectAMQP(ctx, headers)` / `ExtractAMQP(ctx, headers)`:
+    W3C `traceparent` propagation over `amqp091-go` headers for cross-service
+    RabbitMQ tracing.
+  - `phtrace.PhaseHistogram` + `NewPhaseHistogram(meter, name, buckets)` /
+    `MustPhaseHistogram(...)` + `Record` / `Observe`: preconfigured
+    millisecond-unit histogram with explicit bucket boundaries tuned for
+    QR-MPM phase timing (`qrmpm_phase_duration_ms`). Cached per
+    (meterName, histName).
+  - **Context-aware log helpers** (`log.go`): `LogDCtx`, `LogICtx`, `LogWCtx`,
+    `LogECtx` automatically prepend `[trace_id=... span_id=...]` from the
+    ctx's active span. `phtrace.WithFields(ctx, ...)` returns a
+    `LogContextCtx` for operation-scoped logging with trace enrichment;
+    `LogE`/`LogECtx` additionally call `span.RecordError` on the active span.
+  - **Canonical log field keys** for Loki query consistency:
+    `FieldTraceID`, `FieldSpanID`, `FieldTicketID`, `FieldReffNo`,
+    `FieldMerchantID`, `FieldOrderID`, `FieldTrxID`, `FieldTrxNo`,
+    `FieldService`, `FieldRoute`, `FieldVendor`.
+- **Tests**: `phtrace/{config,rmqprop,log,metrics}_test.go` cover env parsing,
+  defaults, carrier round-trip with the standard TraceContext propagator,
+  prefix building with/without spans, and histogram caching / nil-safe
+  behavior. All tests pass under `go test -race ./phtrace/...`.
+
+### Dependencies
+
+- Added OpenTelemetry SDK (indirect `go.opentelemetry.io/otel@v1.43.0`):
+  `otel`, `otel/trace`, `otel/metric`, `otel/propagation`, `otel/sdk`,
+  `otel/sdk/metric`, `otel/exporters/otlp/otlptrace{,grpc}`,
+  `otel/exporters/otlp/otlpmetric{,grpc}`, `otel/semconv/v1.26.0`.
+- Bumped `google.golang.org/grpc` from v1.76.0 to v1.80.0 transitively.
+
+### Compatibility
+
+- New subpackage only. No existing symbols touched; services that do not
+  import `bitbucket.org/paycloudid/paycloudhelper/phtrace` are unaffected.
+- Backward compatible (MINOR): SemVer MINOR bump to v1.9.0.
+
 ## [v1.8.2] - 2026-04-23
 
 ### Added
