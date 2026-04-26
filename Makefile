@@ -1,4 +1,4 @@
-.PHONY: help deps build vet test test-race test-cover fmt clean \
+.PHONY: build clean deps fmt help proto proto-check proto-clean test test-cover test-coverage test-coverage-check test-coverage-whole-repo test-coverage-whole-repo-check test-go test-race vet
 	scripts.list script.run \
 	buf.lint \
 	proto.s3minio.update proto.s3minio.gen proto.s3minio.lint proto.s3minio.breaking proto.s3minio.check proto.service.scaffold \
@@ -131,3 +131,29 @@ ci.check.direct-http: ## Ensure no direct internal s3minio HTTP usage outside ap
 
 ci.check.stub-drift: ## Alias for stub drift check used by CI
 	@bash scripts/proto/check-stub-drift.sh
+
+# --- Auto-generated required targets ---
+
+proto: proto-clean ## Generate Go code from .proto files
+	@echo "Proto generation..."
+	@if [ -f ./protoc.sh ]; then chmod +x ./protoc.sh && ./protoc.sh; elif [ -f ./genproto.sh ]; then sh ./genproto.sh; else echo "No proto script found"; fi
+
+proto-clean: ## Remove generated protobuf Go files before regeneration
+	@echo "Proto clean..."
+	@find . -name "*.pb.go" -type f -delete
+
+proto-check: ## Fail if generated protobuf Go files are out of date
+	@echo "Proto check..."
+	@$(MAKE) proto
+	@if ! git diff --quiet; then echo "Generated protobuf files are out of date. Commit them."; exit 1; fi
+
+test-coverage-whole-repo: ## Print whole-repo merged coverage
+	go test -count=1 -short -coverprofile=coverage.out -covermode=atomic -coverpkg=./... ./...
+	go tool cover -func=coverage.out | tail -25
+
+test-coverage-whole-repo-check: ## Fail if whole-repo merged coverage is below COVERAGE_MIN
+	@echo "Checking whole-repo coverage against COVERAGE_MIN=$(COVERAGE_MIN)..."
+	@go test -count=1 -short -coverprofile=coverage.out -covermode=atomic -coverpkg=./... ./... > /dev/null
+	@total=$$(go tool cover -func=coverage.out | grep total | awk '{print substr($$3, 1, length($$3)-1)}') ; \
+	awk -v total=$$total -v min=$(COVERAGE_MIN) 'BEGIN { if (total < min) { print "Whole-repo coverage " total "% < " min "%"; exit 1 } else { print "Whole-repo coverage " total "% >= " min "%"; exit 0 } }'
+
