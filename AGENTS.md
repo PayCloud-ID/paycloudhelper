@@ -15,7 +15,7 @@
 
 **Go shared library** (`bitbucket.org/paycloudid/paycloudhelper`) providing common utilities to all PayCloud Hub microservices. This is **not a standalone service** — it is imported by ~30 consumer services.
 
-- **Go 1.23** + toolchain 1.24.3
+- **Go 1.25.0** + toolchain 1.25.9
 - **Auto-initializes** on import via `init()` → consumer services call explicit init functions for Redis/RabbitMQ/Sentry
 
 ### Package Structure
@@ -295,6 +295,16 @@ Does the change touch an EXISTING exported function signature?
 | Middleware Development | `.agents/skills/middleware-development/` | Adding/modifying Echo middleware, response handling |
 | Redis Patterns | `.agents/skills/redis-patterns/` | Redis init, store/get, distributed locks, key conventions |
 | Library Maintenance | `.agents/skills/library-maintenance/` | Versioning, deprecation, subpackage rules, release workflow |
+| Redis v9 Consumer Migration Core | `.agents/skills/redis-v9-consumer-migration-core/` | Upgrading service dependency from paycloudhelper v1.x to v2.x safely |
+| Redis v9 Migration for Echo APIs | `.agents/skills/redis-v9-consumer-migration-echo-api/` | Migrating API services using paycloudhelper middleware and Redis request-path logic |
+| Redis v9 Migration for Workers | `.agents/skills/redis-v9-consumer-migration-worker/` | Migrating queue/consumer services using distributed locks and retries |
+| Redis v9 Migration for Schedulers | `.agents/skills/redis-v9-consumer-migration-scheduler/` | Migrating cron/job services that require singleton execution locks |
+
+## Consumer Migration Assets
+
+- Use `prompt-migrate-bitbucket-pipelines-to-github-actions.md` from repo root to generate a GitHub Actions workflow from the current Bitbucket pipeline.
+- For consumer service migration planning, start with the core skill and then select the service-profile skill (`echo-api`, `worker`, or `scheduler`).
+- Keep migration rollouts staged: build/vet/test/race in service repo before promoting to production.
 
 ## Rules Reference
 
@@ -325,7 +335,7 @@ go vet ./...
 git tag v1.x.y && git push origin v1.x.y
 
 # Consumer updates
-go get bitbucket.org/paycloudid/paycloudhelper@v1.x.y && go mod tidy
+go get bitbucket.org/paycloudid/paycloudhelper@v2.0.0 && go mod tidy
 ```
 
 ## Agent Compatibility

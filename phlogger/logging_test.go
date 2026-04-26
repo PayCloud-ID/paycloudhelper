@@ -135,6 +135,59 @@ func TestLogD_FiresHook(t *testing.T) {
 	}
 }
 
+// TestLogJ_LogJI_routeThroughLogI verifies JSON helpers delegate to LogI (info hook).
+func TestLogJ_LogJI_routeThroughLogI(t *testing.T) {
+	disableSampler(t)
+	msgs := hookCapture(t, "info")
+
+	LogJ(map[string]string{"k": "v"})
+	LogJI(map[string]string{"k": "v"})
+
+	if len(*msgs) < 2 {
+		t.Fatalf("expected 2 info emissions, got %d: %v", len(*msgs), *msgs)
+	}
+	if !strings.Contains((*msgs)[0], `"k":"v"`) {
+		t.Errorf("LogJ output should contain JSON, got %q", (*msgs)[0])
+	}
+}
+
+// TestLogErr_noPanic verifies LogErr delegates to golog without crashing.
+// Note: LogErr uses golog's Error() directly and does not route through emitE / fireHooks.
+func TestLogErr_noPanic(t *testing.T) {
+	LogErr(fmt.Errorf("audit failure"))
+}
+
+// TestInitializeLogger_noPanic exercises gin level registration and sampler init.
+func TestInitializeLogger_noPanic(t *testing.T) {
+	t.Cleanup(func() { InitializeSampler(SamplerConfigFromAppEnv()) })
+	InitializeLogger()
+	InitializeLogger()
+}
+
+// TestLogWRated_LogDRated_useSamplerKey verifies warn/debug rated paths share sampler logic.
+func TestLogWRated_LogDRated_useSamplerKey(t *testing.T) {
+	withSampler(t, SamplerConfig{Initial: 1, Thereafter: 0, Period: time.Second})
+	LogSetLevel("debug")
+	t.Cleanup(func() { LogSetLevel("info") })
+
+	var warnN, debugN atomic.Int64
+	RegisterLogHook("warn", func(_, _ string) { warnN.Add(1) })
+	RegisterLogHook("debug", func(_, _ string) { debugN.Add(1) })
+	t.Cleanup(ClearLogHooks)
+
+	LogWRated("w.key", "[TestLogWRated] one")
+	LogWRated("w.key", "[TestLogWRated] two")
+	LogDRated("d.key", "[TestLogDRated] one")
+	LogDRated("d.key", "[TestLogDRated] two")
+
+	if warnN.Load() != 1 {
+		t.Fatalf("LogWRated: want 1 warn hook, got %d", warnN.Load())
+	}
+	if debugN.Load() != 1 {
+		t.Fatalf("LogDRated: want 1 debug hook, got %d", debugN.Load())
+	}
+}
+
 // TestAllLevels_IndependentHooks verifies each level fires its own hook
 // independently in a single test run.
 func TestAllLevels_IndependentHooks(t *testing.T) {

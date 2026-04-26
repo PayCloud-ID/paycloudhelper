@@ -98,3 +98,44 @@ func TestConfig_withDefaults(t *testing.T) {
 		t.Errorf("Environment not backfilled: %s", c.Environment)
 	}
 }
+
+func TestFromEnv_AllFunctionalOptions(t *testing.T) {
+	t.Setenv("OTEL_SERVICE_NAME", "")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+	t.Setenv("OTEL_ENABLED", "false")
+
+	c := FromEnv(
+		WithServiceName("n"),
+		WithServiceVersion("v1"),
+		WithEnvironment("stg"),
+		WithEndpoint("collector:4317"),
+		WithInsecure(false),
+		WithSamplingRatio(0.25),
+		WithEnabled(true),
+		WithResourceAttribute("rk", "rv"),
+	)
+	if c.ServiceName != "n" {
+		t.Errorf("ServiceName=%q", c.ServiceName)
+	}
+	if c.ServiceVersion != "v1" {
+		t.Errorf("ServiceVersion=%q", c.ServiceVersion)
+	}
+	if c.Environment != "stg" {
+		t.Errorf("Environment=%q", c.Environment)
+	}
+	if c.Endpoint != "collector:4317" {
+		t.Errorf("Endpoint=%q", c.Endpoint)
+	}
+	if c.Insecure {
+		t.Error("expected Insecure=false")
+	}
+	if c.SamplingRatio != 0.25 {
+		t.Errorf("SamplingRatio=%f", c.SamplingRatio)
+	}
+	if !c.Enabled {
+		t.Error("expected Enabled=true from WithEnabled")
+	}
+	if c.ResourceAttributes["rk"] != "rv" {
+		t.Errorf("ResourceAttributes[rk]=%q", c.ResourceAttributes["rk"])
+	}
+}

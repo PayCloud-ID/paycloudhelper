@@ -41,6 +41,25 @@ type AmqpClient struct {
 	notifyConfirm   chan amqp.Confirmation
 	isReady         bool
 	amqpConfig      *amqp.Config
+
+	// publishForTest replaces channel.PublishWithContext in PushWithTTL when set (package tests only).
+	publishForTest func(ctx context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error
+	// consumeForTest replaces Qos+Consume in Consume when set (package tests only).
+	consumeForTest func() (<-chan amqp.Delivery, error)
+	// qosForTest replaces channel.Qos in Consume when set (package tests only; ignored if consumeForTest set).
+	qosForTest func(prefetchCount, prefetchSize int, global bool) error
+	// channelCloseForTest and connCloseForTest replace real Close() I/O when set (package tests only).
+	channelCloseForTest func() error
+	connCloseForTest    func() error
+	// queuePassiveForTest replaces QueueDeclarePassive in checkIfQueueExists when set (package tests only).
+	queuePassiveForTest func(ch *amqp.Channel) (exists bool, err error)
+	// ccChannelCloseForTest / ccConnCloseForTest replace Close in Cc when set (package tests only).
+	ccChannelCloseForTest func() error
+	ccConnCloseForTest    func() error
+
+	// initForTest, when set, replaces init(conn) during reconnect loops (package tests only).
+	// It allows testing handleReInit success branches without a live broker.
+	initForTest func(conn *amqp.Connection) error
 }
 
 func (c *AmqpClient) ConnName() string {
@@ -94,6 +113,43 @@ var (
 	errAlreadyClosed = errors.New("already closed: not connected to the server")
 	errShutdown      = errors.New("client is shutting down")
 )
+
+// amqpDialHook connects to the broker. Package tests may replace it to avoid real TCP dials.
+var amqpDialHook = defaultAmqpDial
+
+// amqpReconnectDelayForTest, when > 0, replaces reconnectDelay after failed dials (tests only).
+var amqpReconnectDelayForTest time.Duration
+
+// amqpReinitDelayForTest, when > 0, replaces reInitDelay in handleReInit retry loops (tests only).
+var amqpReinitDelayForTest time.Duration
+
+// amqpResendDelayForTest, when > 0, replaces resendDelay between Push retries (tests only).
+var amqpResendDelayForTest time.Duration
+
+func amqpReconnectSleep() time.Duration {
+	if amqpReconnectDelayForTest > 0 {
+		return amqpReconnectDelayForTest
+	}
+	return reconnectDelay
+}
+
+func amqpReinitSleep() time.Duration {
+	if amqpReinitDelayForTest > 0 {
+		return amqpReinitDelayForTest
+	}
+	return reInitDelay
+}
+
+func amqpResendSleep() time.Duration {
+	if amqpResendDelayForTest > 0 {
+		return amqpResendDelayForTest
+	}
+	return resendDelay
+}
+
+func defaultAmqpDial(addr string, cfg amqp.Config) (*amqp.Connection, error) {
+	return amqp.DialConfig(addr, cfg)
+}
 
 func defaultAmqpClient() *AmqpClient {
 	return &AmqpClient{
@@ -160,7 +216,7 @@ func (c *AmqpClient) handleReconnect(addr string) {
 			select {
 			case <-c.done:
 				return
-			case <-time.After(reconnectDelay):
+			case <-time.After(amqpReconnectSleep()):
 			}
 			continue
 		}
@@ -173,7 +229,7 @@ func (c *AmqpClient) handleReconnect(addr string) {
 
 // connect will create a new AMQP connection
 func (c *AmqpClient) connect(addr string) (*amqp.Connection, error) {
-	conn, err := amqp.DialConfig(addr, c.AmqpConfig())
+	conn, err := amqpDialHook(addr, c.AmqpConfig())
 
 	if err != nil {
 		return nil, err
@@ -202,7 +258,7 @@ func (c *AmqpClient) handleReInit(conn *amqp.Connection) bool {
 			case <-c.notifyConnClose:
 				c.infoLog.Println("[AMQP] connection closed, reconnecting...")
 				return false
-			case <-time.After(reInitDelay):
+			case <-time.After(amqpReinitSleep()):
 			}
 			continue
 		}
@@ -222,6 +278,10 @@ func (c *AmqpClient) handleReInit(conn *amqp.Connection) bool {
 func (c *AmqpClient) checkIfQueueExists(ch *amqp.Channel) (bool, error) {
 	if ch == nil {
 		return false, errors.New("[AMQP] failed to open channel")
+	}
+
+	if c.queuePassiveForTest != nil {
+		return c.queuePassiveForTest(ch)
 	}
 
 	_, err := ch.QueueDeclarePassive(
@@ -244,6 +304,10 @@ func (c *AmqpClient) checkIfQueueExists(ch *amqp.Channel) (bool, error) {
 
 // init will initialize channel & declare queue
 func (c *AmqpClient) init(conn *amqp.Connection) error {
+	if c.initForTest != nil {
+		return c.initForTest(conn)
+	}
+
 	ch, err := conn.Channel()
 	if err != nil {
 		return err
@@ -329,7 +393,7 @@ func (c *AmqpClient) Push(data []byte) error {
 				return errShutdown
 			case <-deadline:
 				return fmt.Errorf("[AMQP] push timeout after %v: %w", PushTimeout, err)
-			case <-time.After(resendDelay):
+			case <-time.After(amqpResendSleep()):
 			}
 			continue
 		}
@@ -374,6 +438,10 @@ func (c *AmqpClient) PushWithTTL(data []byte, ttl string) error {
 	}
 	if ttl != "" {
 		pub.Expiration = ttl
+	}
+
+	if c.publishForTest != nil {
+		return c.publishForTest(ctx, "", c.queueName, false, false, pub)
 	}
 
 	return c.channel.PublishWithContext(
@@ -421,7 +489,15 @@ func (c *AmqpClient) Consume() (<-chan amqp.Delivery, error) {
 	}
 	c.m.Unlock()
 
-	if err := c.channel.Qos(
+	if c.consumeForTest != nil {
+		return c.consumeForTest()
+	}
+
+	if c.qosForTest != nil {
+		if err := c.qosForTest(1, 0, false); err != nil {
+			return nil, err
+		}
+	} else if err := c.channel.Qos(
 		1,     // prefetchCount
 		0,     // prefetchSize
 		false, // global
@@ -451,11 +527,20 @@ func (c *AmqpClient) Close() error {
 		return errAlreadyClosed
 	}
 	close(c.done)
-	err := c.channel.Close()
+	var err error
+	if c.channelCloseForTest != nil {
+		err = c.channelCloseForTest()
+	} else {
+		err = c.channel.Close()
+	}
 	if err != nil {
 		return err
 	}
-	err = c.connection.Close()
+	if c.connCloseForTest != nil {
+		err = c.connCloseForTest()
+	} else {
+		err = c.connection.Close()
+	}
 	if err != nil {
 		return err
 	}
@@ -467,7 +552,15 @@ func (c *AmqpClient) Close() error {
 // Cc For debug purpose
 // TODO : debugging close channel
 func (c *AmqpClient) Cc() error {
-	_ = c.channel.Close()
-	_ = c.connection.Close()
+	if c.ccChannelCloseForTest != nil {
+		_ = c.ccChannelCloseForTest()
+	} else {
+		_ = c.channel.Close()
+	}
+	if c.ccConnCloseForTest != nil {
+		_ = c.ccConnCloseForTest()
+	} else {
+		_ = c.connection.Close()
+	}
 	return nil
 }

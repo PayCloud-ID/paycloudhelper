@@ -1,10 +1,14 @@
 package paycloudhelper
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 	"testing"
 	"time"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 // ---------------------------------------------------------------------------
@@ -365,6 +369,83 @@ func TestPushMessageAudit_EarlyExit_NotReady(t *testing.T) {
 
 	// Should return early without attempting Push.
 	pushMessageAudit(payload)
+}
+
+// TestPushMessageAudit_PushSucceeds covers the async publish success path (Push + confirm ack).
+func TestPushMessageAudit_PushSucceeds(t *testing.T) {
+	orig := auditTrailMqClient.Load()
+	defer auditTrailMqClient.Store(orig)
+
+	notify := make(chan amqp.Confirmation, 2)
+	done := make(chan bool)
+	client := &AmqpClient{
+		m:             &sync.Mutex{},
+		isReady:       true,
+		queueName:     "audit-q",
+		connName:      "trail-conn",
+		done:          done,
+		notifyConfirm: notify,
+		publishForTest: func(context.Context, string, string, bool, bool, amqp.Publishing) error {
+			return nil
+		},
+	}
+	auditTrailMqClient.Store(client)
+
+	go func() { notify <- amqp.Confirmation{Ack: true} }()
+
+	prevTO := PushTimeout
+	prevResend := amqpResendDelayForTest
+	PushTimeout = 2 * time.Second
+	amqpResendDelayForTest = 2 * time.Millisecond
+	t.Cleanup(func() {
+		PushTimeout = prevTO
+		amqpResendDelayForTest = prevResend
+	})
+
+	pushMessageAudit(MessagePayloadAudit{
+		Id:      9001,
+		Command: CmdAuditTrailData,
+		Time:    time.Now().Format(time.DateTime),
+	})
+}
+
+// TestPushMessageAudit_PushFailure covers logAuditErrorWithSentry when Push exhausts retries.
+func TestPushMessageAudit_PushFailure(t *testing.T) {
+	orig := auditTrailMqClient.Load()
+	defer auditTrailMqClient.Store(orig)
+
+	notify := make(chan amqp.Confirmation, 2)
+	done := make(chan bool)
+	client := &AmqpClient{
+		m:             &sync.Mutex{},
+		isReady:       true,
+		queueName:     "audit-q",
+		connName:      "trail-conn",
+		done:          done,
+		notifyConfirm: notify,
+		publishForTest: func(context.Context, string, string, bool, bool, amqp.Publishing) error {
+			return errors.New("publish failed")
+		},
+	}
+	auditTrailMqClient.Store(client)
+
+	prevRetries := PushMaxRetries
+	prevTO := PushTimeout
+	prevResend := amqpResendDelayForTest
+	PushMaxRetries = 2
+	PushTimeout = 300 * time.Millisecond
+	amqpResendDelayForTest = 3 * time.Millisecond
+	t.Cleanup(func() {
+		PushMaxRetries = prevRetries
+		PushTimeout = prevTO
+		amqpResendDelayForTest = prevResend
+	})
+
+	pushMessageAudit(MessagePayloadAudit{
+		Id:      9002,
+		Command: CmdAuditTrailData,
+		Time:    time.Now().Format(time.DateTime),
+	})
 }
 
 // TestLogAuditNotReadyRateLimited verifies rate limiting suppresses repeated calls.

@@ -31,9 +31,33 @@ type rMqAutoConnect struct {
 	declaredQueues []string       // queues
 }
 
+// rmqDialHook allows tests to stub amqp.DialConfig and avoid real network calls.
+var rmqDialHook = amqp.DialConfig
+
+// rmqAfterHook allows tests to stub time.After and avoid long sleeps.
+var rmqAfterHook = time.After
+
+// rmqConnectMaxTrialsForTest, when > 0, caps connect() retries and returns the last error (tests only).
+var rmqConnectMaxTrialsForTest int
+
+// rmqChannelHook allows tests to stub conn.Channel().
+var rmqChannelHook = func(conn *amqp.Connection) (*amqp.Channel, error) { return conn.Channel() }
+
+// rmqNotifyCloseHook allows tests to stub conn.NotifyClose().
+var rmqNotifyCloseHook = func(conn *amqp.Connection, c chan *amqp.Error) <-chan *amqp.Error { return conn.NotifyClose(c) }
+
+// rmqQueueDeclareHook allows tests to stub ch.QueueDeclare().
+var rmqQueueDeclareHook = func(ch *amqp.Channel, name string, durable, autoDelete, exclusive, noWait bool, args amqp.Table) (amqp.Queue, error) {
+	return ch.QueueDeclare(name, durable, autoDelete, exclusive, noWait, args)
+}
+
+// rmqChannelCloseHook / rmqConnCloseHook allow tests to stub Close() calls inside reset().
+var rmqChannelCloseHook = func(ch *amqp.Channel) error { return ch.Close() }
+var rmqConnCloseHook = func(conn *amqp.Connection) error { return conn.Close() }
+
 func (r *rMqAutoConnect) reset() {
-	r.ch.Close()
-	r.conn.Close()
+	_ = rmqChannelCloseHook(r.ch)
+	_ = rmqConnCloseHook(r.conn)
 }
 
 func (r *rMqAutoConnect) connect(uri string) (c *amqp.Connection, err error) {
@@ -46,24 +70,27 @@ func (r *rMqAutoConnect) connect(uri string) (c *amqp.Connection, err error) {
 	trial := 0
 	for {
 		trial++
+		if rmqConnectMaxTrialsForTest > 0 && trial > rmqConnectMaxTrialsForTest {
+			return nil, err
+		}
 		cfg := amqp.Config{
 			Properties: amqp.Table{
 				"connection_name": os.Getenv("APP_NAME") + "03",
 			},
 		}
-		r.conn, err = amqp.DialConfig(uri, cfg)
+		r.conn, err = rmqDialHook(uri, cfg)
 		if err != nil {
 			LogE("%s connection failed err=%s", buildLogPrefix("RMqAutoConnect.connect"), err.Error())
 			switch {
 			case trial <= maxTrialSecond:
 				LogI("%s reconnect delay=30s", buildLogPrefix("RMqAutoConnect.connect"))
-				<-time.After(time.Duration(30) * time.Second)
+				<-rmqAfterHook(time.Duration(30) * time.Second)
 			case trial <= maxTrialMinute:
 				LogI("%s reconnect delay=10m", buildLogPrefix("RMqAutoConnect.connect"))
-				<-time.After(time.Duration(10) * time.Minute)
+				<-rmqAfterHook(time.Duration(10) * time.Minute)
 			default:
 				LogI("%s reconnect delay=1h", buildLogPrefix("RMqAutoConnect.connect"))
-				<-time.After(time.Duration(1) * time.Hour)
+				<-rmqAfterHook(time.Duration(1) * time.Hour)
 			}
 			continue
 		}
@@ -74,7 +101,7 @@ func (r *rMqAutoConnect) connect(uri string) (c *amqp.Connection, err error) {
 	r.conn.Config.Heartbeat = time.Duration(5) * time.Second
 	//declare channel
 	LogI("%s opening channel", buildLogPrefix("RMqAutoConnect.connect"))
-	r.ch, err = r.conn.Channel()
+	r.ch, err = rmqChannelHook(r.conn)
 	if err != nil {
 		r.conn.Close()
 		LogF("%s channel open failed err=%s", buildLogPrefix("RMqAutoConnect.connect"), err.Error())
@@ -88,7 +115,8 @@ func (r *rMqAutoConnect) DeclareQueues(queues ...string) (err error) {
 	//declare queues
 	for _, queue := range queues {
 		LogI("%s declare queue=%s", buildLogPrefix("RMqAutoConnect.DeclareQueues"), queue)
-		_, err = r.ch.QueueDeclare(
+		_, err = rmqQueueDeclareHook(
+			r.ch,
 			queue, //name
 			//true,  //durable
 			false, //durable
@@ -164,7 +192,7 @@ func (r *rMqAutoConnect) reconnect() {
 			case <-r.ctxReconnect.Done():
 				LogI("%s stop reconnect listener", buildLogPrefix("RMqAutoConnect.reconnect"))
 				return
-			case <-r.getConnection().NotifyClose(r.notifCloseCh):
+			case <-rmqNotifyCloseHook(r.getConnection(), r.notifCloseCh):
 				r.beforeReconnect()
 				LogI("%s connection closed, reconnecting", buildLogPrefix("RMqAutoConnect.reconnect"))
 				r.reset()

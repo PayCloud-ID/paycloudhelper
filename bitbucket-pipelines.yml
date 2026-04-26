@@ -1,8 +1,8 @@
 # Bitbucket Pipelines — paycloudhelper
 # Runs build, vet, and unit tests on every push to develop and main.
-# Go version must match go.mod (e.g. 1.24).
+# Go version must match go.mod / toolchain (e.g. 1.25).
 
-image: golang:1.24-bookworm
+image: golang:1.25-bookworm
 
 definitions:
   caches:
@@ -23,6 +23,7 @@ definitions:
           - go build ./...
           - go vet ./...
           - go test ./...
+          - make test-coverage-check COVERAGE_MIN=65
 
 pipelines:
   branches:

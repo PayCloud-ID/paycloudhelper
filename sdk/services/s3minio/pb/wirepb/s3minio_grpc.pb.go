@@ -30,7 +30,13 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// S3MinIOService provides basic upload/download and health RPCs as a sample.
+// S3MinIOService provides internal gRPC capabilities that are currently kept in
+// parity tracking with docs/plans/2026-04-12-s3minio-capability-matrix.md.
+//
+// HTTP-only behaviors still outside this service definition:
+// - GET /api/v2/view (stream)
+// - POST /api/v2/download_file (stream attachment)
+// - GET /readyz (dependency readiness)
 type S3MinIOServiceClient interface {
 	// Upload a file (binary content in request)
 	Upload(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadRequest, UploadResponse], error)
@@ -109,7 +115,13 @@ func (c *s3MinIOServiceClient) Health(ctx context.Context, in *HealthRequest, op
 // All implementations must embed UnimplementedS3MinIOServiceServer
 // for forward compatibility.
 //
-// S3MinIOService provides basic upload/download and health RPCs as a sample.
+// S3MinIOService provides internal gRPC capabilities that are currently kept in
+// parity tracking with docs/plans/2026-04-12-s3minio-capability-matrix.md.
+//
+// HTTP-only behaviors still outside this service definition:
+// - GET /api/v2/view (stream)
+// - POST /api/v2/download_file (stream attachment)
+// - GET /readyz (dependency readiness)
 type S3MinIOServiceServer interface {
 	// Upload a file (binary content in request)
 	Upload(grpc.ClientStreamingServer[UploadRequest, UploadResponse]) error

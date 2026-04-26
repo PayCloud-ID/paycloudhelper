@@ -5,6 +5,7 @@ import (
 	"errors"
 	"mime/multipart"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -53,6 +54,11 @@ func TestGetPresignedURL(t *testing.T) {
 		{
 			name:    "non ok response",
 			d:       fakeDownloader{res: &DownloadResponse{Code: 13, Message: "boom"}},
+			wantErr: true,
+		},
+		{
+			name:    "non ok empty message uses default",
+			d:       fakeDownloader{res: &DownloadResponse{Code: 500, Message: ""}},
 			wantErr: true,
 		},
 		{
@@ -174,5 +180,29 @@ func TestUploadByMultipart(t *testing.T) {
 	}
 	if res == nil || res.URL != "ok" {
 		t.Fatalf("unexpected result: %+v", res)
+	}
+}
+
+func TestUploadByFile_success(t *testing.T) {
+	t.Parallel()
+	p := filepath.Join(t.TempDir(), "up.bin")
+	if err := os.WriteFile(p, []byte("z"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	u := fakeUploader{res: &UploadResponse{Code: CodeOK, Data: &UploadResult{URL: "https://u"}}}
+	out, err := UploadByFile(context.Background(), u, 1, 2, "p", p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out == nil || out.URL != "https://u" {
+		t.Fatalf("got %+v", out)
+	}
+}
+
+func TestUploadByFile_buildError(t *testing.T) {
+	t.Parallel()
+	_, err := UploadByFile(context.Background(), fakeUploader{}, 1, 2, "p", filepath.Join(t.TempDir(), "missing-upload.bin"))
+	if err == nil {
+		t.Fatal("expected error from missing file")
 	}
 }
