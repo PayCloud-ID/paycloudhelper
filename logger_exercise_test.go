@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"bitbucket.org/paycloudid/paycloudhelper/phlogger"
+	"github.com/PayCloud-ID/paycloudhelper/phlogger"
 )
 
 // Exercises root logger.go delegators to improve merged -coverpkg coverage.

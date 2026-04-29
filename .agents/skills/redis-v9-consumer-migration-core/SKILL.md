@@ -8,7 +8,7 @@ applyTo: '**/*.go, **/go.mod, **/.env*, **/config*.go'
 
 ## Use When
 
-- A consumer service upgrades `bitbucket.org/paycloudid/paycloudhelper` to `v2.x`.
+- A consumer service upgrades `github.com/PayCloud-ID/paycloudhelper` to `v2.x`.
 - The service currently imports `github.com/go-redis/redis/v8` directly.
 - Teams need a production-safe rollout and rollback path.
 
@@ -23,7 +23,7 @@ applyTo: '**/*.go, **/go.mod, **/.env*, **/config*.go'
 1. Update module dependency:
 
 ```bash
-go get bitbucket.org/paycloudid/paycloudhelper@v2.0.0
+go get github.com/PayCloud-ID/paycloudhelper@v2.0.0
 go mod tidy
 ```
 

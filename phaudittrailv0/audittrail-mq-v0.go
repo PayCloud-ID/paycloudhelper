@@ -7,8 +7,8 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
-	"bitbucket.org/paycloudid/paycloudhelper/phhelper"
-	"bitbucket.org/paycloudid/paycloudhelper/phlogger"
+	"github.com/PayCloud-ID/paycloudhelper/phhelper"
+	"github.com/PayCloud-ID/paycloudhelper/phlogger"
 )
 
 type RMqAutoConnect struct {

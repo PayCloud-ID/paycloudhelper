@@ -6,7 +6,7 @@ import (
 	"net"
 	"testing"
 
-	wirepb "bitbucket.org/paycloudid/paycloudhelper/sdk/services/s3minio/pb/wirepb"
+	wirepb "github.com/PayCloud-ID/paycloudhelper/sdk/services/s3minio/pb/wirepb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"

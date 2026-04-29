@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-## [v1.10.0](https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.9.0..v1.10.0) - 2026-04-24
+## [v1.10.0](https://github.com/PayCloud-ID/paycloudhelper/compare/v1.9.0..v1.10.0) - 2026-04-24
 
 ### Changed (Breaking)
 
@@ -77,7 +77,7 @@ and Bitbucket pipeline (merged statements ~71% with default `COVERAGE_PKGS`
 after redis locks, `phtrace.Init`, HTTP bridge tests, CSRF validation, and
 config validation with live Redis options).
 
-## [v1.9.0](https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.8.1..v1.9.0) - 2026-04-22
+## [v1.9.0](https://github.com/PayCloud-ID/paycloudhelper/compare/v1.8.1..v1.9.0) - 2026-04-22
 
 ### Added
 
@@ -132,7 +132,7 @@ behavior. All tests pass under `go test -race ./phtrace/...`.
 ### Compatibility
 
 - New subpackage only. No existing symbols touched; services that do not
-import `bitbucket.org/paycloudid/paycloudhelper/phtrace` are unaffected.
+import `github.com/PayCloud-ID/paycloudhelper/phtrace` are unaffected.
 - Backward compatible (MINOR): SemVer MINOR bump to v1.9.0.
 
 ## [v1.8.2] - 2026-04-23
@@ -158,7 +158,7 @@ import `bitbucket.org/paycloudid/paycloudhelper/phtrace` are unaffected.
 - **Script doc-header rollout** (`scripts/check-no-direct-s3minio-http.sh`, `scripts/generate-makefile.sh`, `scripts/run_tests.sh`, `scripts/proto/new-service-scaffold.sh`, `scripts/proto/update-s3minio-proto.sh`, `scripts/proto/gen-s3minio-client.sh`, `scripts/proto/check-stub-drift.sh`): Applied the standardized shell-script header format to touched scripts.
 - **Planning docs refresh** (`docs/plans/*`): Updated internal execution/planning documents to match script-policy and proto-workflow updates.
 
-## [v1.8.1](https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.8.0-beta.2..v1.8.1) - 2026-04-19
+## [v1.8.1](https://github.com/PayCloud-ID/paycloudhelper/compare/v1.8.0-beta.2..v1.8.1) - 2026-04-19
 
 ### Added
 
@@ -175,7 +175,7 @@ from `AppName` and `EventTime` from `time.Now()`. Requires at least one of `Reff
 - **Unit tests** (`audittrail_trx_test.go`): Entity constants, publisher setup, enable/disable,
 correlation validation, auto-defaults, metadata passthrough, concurrent safety, unique IDs.
 
-## [v1.8.0-beta.2](https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.7.1-beta.1..v1.8.0-beta.2) - 2026-04-14
+## [v1.8.0-beta.2](https://github.com/PayCloud-ID/paycloudhelper/compare/v1.7.1-beta.1..v1.8.0-beta.2) - 2026-04-14
 
 ### Added
 
@@ -252,10 +252,10 @@ correlation validation, auto-defaults, metadata passthrough, concurrent safety, 
 
 ---
 
-## [1.7.1-beta.1](https://bitbucket.org/paycloudid/paycloudhelper/src/v1.7.1-beta.1) and earlier
+## [1.7.1-beta.1](https://github.com/PayCloud-ID/paycloudhelper/src/v1.7.1-beta.1) and earlier
 
 History before this changelog was introduced. See git tags and release notes for older versions.
 
 Retracted versions (do not use): v1.6.3, v1.6.0, v1.5.2 — see `go.mod` retract block.
 
-[v1.8.2]: https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.8.1..v1.8.2
+[v1.8.2]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.8.1..v1.8.2

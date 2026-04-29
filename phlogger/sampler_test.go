@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"bitbucket.org/paycloudid/paycloudhelper/phhelper"
+	"github.com/PayCloud-ID/paycloudhelper/phhelper"
 )
 
 func TestSampler_DisabledConfig_AlwaysAllows(t *testing.T) {

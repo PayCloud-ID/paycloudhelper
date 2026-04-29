@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"bitbucket.org/paycloudid/paycloudhelper/phhelper"
+	"github.com/PayCloud-ID/paycloudhelper/phhelper"
 
 	"github.com/joho/godotenv"
 )

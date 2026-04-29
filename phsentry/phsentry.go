@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"bitbucket.org/paycloudid/paycloudhelper/phhelper"
-	"bitbucket.org/paycloudid/paycloudhelper/phlogger"
+	"github.com/PayCloud-ID/paycloudhelper/phhelper"
+	"github.com/PayCloud-ID/paycloudhelper/phlogger"
 	"dario.cat/mergo"
 	"github.com/getsentry/sentry-go"
 )

@@ -3,7 +3,7 @@ package phsentry
 import (
 	"sync"
 
-	"bitbucket.org/paycloudid/paycloudhelper/phlogger"
+	"github.com/PayCloud-ID/paycloudhelper/phlogger"
 )
 
 var (
