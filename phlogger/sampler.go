@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"bitbucket.org/paycloudid/paycloudhelper/phhelper"
+	"github.com/PayCloud-ID/paycloudhelper/phhelper"
 )
 
 // SamplerConfig controls log sampling behavior per key per period.

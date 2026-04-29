@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"bitbucket.org/paycloudid/paycloudhelper/phhelper"
+	"github.com/PayCloud-ID/paycloudhelper/phhelper"
 )
 
 var (

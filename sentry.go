@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"bitbucket.org/paycloudid/paycloudhelper/phsentry"
+	"github.com/PayCloud-ID/paycloudhelper/phsentry"
 	"github.com/getsentry/sentry-go"
 )
 

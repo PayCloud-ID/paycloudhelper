@@ -10,8 +10,8 @@ Wire the hook immediately after `initLogger()` so `pchelper.LogD` is available:
 import (
 	"time"
 
-	pchelper "bitbucket.org/paycloudid/paycloudhelper"
-	s3helper "bitbucket.org/paycloudid/paycloudhelper/sdk/services/s3minio/helper"
+	pchelper "github.com/PayCloud-ID/paycloudhelper"
+	s3helper "github.com/PayCloud-ID/paycloudhelper/sdk/services/s3minio/helper"
 )
 
 func main() {

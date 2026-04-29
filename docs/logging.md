@@ -17,7 +17,7 @@ Consumer services import the **root package** only and use the aliased shorthand
 ## Installation & Import
 
 ```go
-import pchelper "bitbucket.org/paycloudid/paycloudhelper"
+import pchelper "github.com/PayCloud-ID/paycloudhelper"
 ```
 
 Always alias as `pchelper` for consistency across all PayCloud services.
@@ -85,7 +85,7 @@ Is the message about a failure or unexpected error?
 ### Basic Levels
 
 ```go
-import pchelper "bitbucket.org/paycloudid/paycloudhelper"
+import pchelper "github.com/PayCloud-ID/paycloudhelper"
 
 // Info — normal operation
 pchelper.LogI("[InitRedis] connected to Redis host=%s port=%s", host, port)
@@ -202,13 +202,13 @@ Possible output:
 ### 1. Add dependency
 
 ```bash
-go get bitbucket.org/paycloudid/paycloudhelper@latest
+go get github.com/PayCloud-ID/paycloudhelper@latest
 ```
 
 ### 2. Import with alias
 
 ```go
-import pchelper "bitbucket.org/paycloudid/paycloudhelper"
+import pchelper "github.com/PayCloud-ID/paycloudhelper"
 ```
 
 ### 3. Replace existing log calls
@@ -275,7 +275,7 @@ The `phlogger` subpackage is the implementation layer and is **not intended for 
 If you must import `phlogger` directly (e.g., from another subpackage):
 
 ```go
-import "bitbucket.org/paycloudid/paycloudhelper/phlogger"
+import "github.com/PayCloud-ID/paycloudhelper/phlogger"
 
 phlogger.LogI("[FuncName] msg")
 phlogger.LogE("[FuncName] error: %v", err)

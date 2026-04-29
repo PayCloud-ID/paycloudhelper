@@ -5,7 +5,7 @@ This policy defines how consumer services adopt paycloudhelper SDK updates safel
 ## Cadence
 
 - Dependency update cadence: weekly.
-- Recommended automation: scheduled dependency PR for `bitbucket.org/paycloudid/paycloudhelper`.
+- Recommended automation: scheduled dependency PR for `github.com/PayCloud-ID/paycloudhelper`.
 - Emergency patch upgrades: immediate for security or production-impacting fixes.
 
 ## Version Pinning

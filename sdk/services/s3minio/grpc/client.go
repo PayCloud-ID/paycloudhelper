@@ -4,7 +4,7 @@ package grpc
 import (
 	extgrpc "google.golang.org/grpc"
 
-	"bitbucket.org/paycloudid/paycloudhelper/sdk/services/s3minio/pb"
+	"github.com/PayCloud-ID/paycloudhelper/sdk/services/s3minio/pb"
 )
 
 type Client struct {

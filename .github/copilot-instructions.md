@@ -8,7 +8,7 @@
 ## Quick Reference
 
 - **Go shared library** — imported by ~30 PayCloud microservices, not a standalone service
-- **Module:** `bitbucket.org/paycloudid/paycloudhelper`
+- **Module:** `github.com/PayCloud-ID/paycloudhelper`
 - **Auto-init:** `init()` runs automatically on import → explicit calls needed for Redis/RabbitMQ/Sentry
 - **Backward compat:** NEVER change existing exported function signatures
 - **Service SDKs:** use `sdk/services/<service>/...` as the canonical path for shared service integrations
@@ -228,7 +228,7 @@ This library follows **strict semantic versioning** because multiple production 
    # Compare with previous version
 
    # Check backwards compatibility
-   go list -m -versions bitbucket.org/paycloudid/paycloudhelper
+   go list -m -versions github.com/PayCloud-ID/paycloudhelper
   ```
 2. **Version Retractions (Historical Issues)**
   - v1.6.3: Redis error logging bug (too verbose)
@@ -248,7 +248,7 @@ This library follows **strict semantic versioning** because multiple production 
    git push origin v1.x.y
 
    # Consumer services update
-   go get bitbucket.org/paycloudid/paycloudhelper@v1.x.y
+   go get github.com/PayCloud-ID/paycloudhelper@v1.x.y
    go mod tidy
   ```
 5. **Communication**

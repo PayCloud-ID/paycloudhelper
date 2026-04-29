@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"time"
 
-	"bitbucket.org/paycloudid/paycloudhelper/phlogger"
-	"bitbucket.org/paycloudid/paycloudhelper/phsentry"
-	"bitbucket.org/paycloudid/paycloudhelper/phtrace"
+	"github.com/PayCloud-ID/paycloudhelper/phlogger"
+	"github.com/PayCloud-ID/paycloudhelper/phsentry"
+	"github.com/PayCloud-ID/paycloudhelper/phtrace"
 	"github.com/kataras/golog"
 )
 

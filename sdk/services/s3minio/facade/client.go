@@ -4,8 +4,8 @@ package facade
 import (
 	nethttp "net/http"
 
-	sdkgrpc "bitbucket.org/paycloudid/paycloudhelper/sdk/services/s3minio/grpc"
-	sdkhttp "bitbucket.org/paycloudid/paycloudhelper/sdk/services/s3minio/http"
+	sdkgrpc "github.com/PayCloud-ID/paycloudhelper/sdk/services/s3minio/grpc"
+	sdkhttp "github.com/PayCloud-ID/paycloudhelper/sdk/services/s3minio/http"
 	extgrpc "google.golang.org/grpc"
 )
 

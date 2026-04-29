@@ -3,7 +3,7 @@ package paycloudhelper
 import (
 	"time"
 
-	"bitbucket.org/paycloudid/paycloudhelper/phhelper"
+	"github.com/PayCloud-ID/paycloudhelper/phhelper"
 )
 
 // auditPublisher is the package-level worker pool publisher.

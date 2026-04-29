@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"bitbucket.org/paycloudid/paycloudhelper/sdk/services/s3minio/helper"
+	"github.com/PayCloud-ID/paycloudhelper/sdk/services/s3minio/helper"
 )
 
 func TestNew_usesDefaultHTTPClientWhenNil(t *testing.T) {

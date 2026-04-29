@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"bitbucket.org/paycloudid/paycloudhelper/sdk/services/s3minio/helper"
-	"bitbucket.org/paycloudid/paycloudhelper/sdk/services/s3minio/pb"
+	"github.com/PayCloud-ID/paycloudhelper/sdk/services/s3minio/helper"
+	"github.com/PayCloud-ID/paycloudhelper/sdk/services/s3minio/pb"
 )
 
 var _ helper.Client = (*Client)(nil)

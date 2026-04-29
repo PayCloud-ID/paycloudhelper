@@ -59,7 +59,7 @@ git tag v1.x.y
 git push origin v1.x.y
 
 # 5. Consumer services update
-go get bitbucket.org/paycloudid/paycloudhelper@v1.x.y
+go get github.com/PayCloud-ID/paycloudhelper@v1.x.y
 go mod tidy
 ```
 

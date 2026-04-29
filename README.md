@@ -8,7 +8,7 @@
 **Go Version:** 1.25.0 (toolchain: go1.25.9)
 **Last Updated:** April 25, 2026
 
-Module: `bitbucket.org/paycloudid/paycloudhelper`  
+Module: `github.com/PayCloud-ID/paycloudhelper`  
 Go: 1.25 (toolchain pinned via `go.mod`)
 
 ---
@@ -93,7 +93,7 @@ flowchart LR
 ## Quick Start
 
 ```go
-import pch "bitbucket.org/paycloudid/paycloudhelper"
+import pch "github.com/PayCloud-ID/paycloudhelper"
 
 // In main() — after godotenv.Load()
 pch.InitializeRedisWithRetry(pch.RedisInitOptions{...})
@@ -137,7 +137,7 @@ pch.ConfigureLogForwarding(pch.LogForwardConfig{
 
 ### Logging
 
-Import the root package (e.g. `import pch "bitbucket.org/paycloudid/paycloudhelper"`). **Do not import `phlogger` directly in consumer services.** Every log line must include the caller in square brackets: use `[Type.MethodName]` for methods (e.g. `[Server.Start]`) and `[FuncName]` for plain functions. Prefer key=value style after the prefix.
+Import the root package (e.g. `import pch "github.com/PayCloud-ID/paycloudhelper"`). **Do not import `phlogger` directly in consumer services.** Every log line must include the caller in square brackets: use `[Type.MethodName]` for methods (e.g. `[Server.Start]`) and `[FuncName]` for plain functions. Prefer key=value style after the prefix.
 
 ```go
 pch.LogI("[FuncName] started id=%s", id)    // Info — or [Server.Start] for methods
@@ -355,7 +355,7 @@ The service-scoped helper centralizes repeated request-building and response-val
 It is transport-neutral and used by both gRPC and HTTP bridge adapters in the same SDK namespace.
 
 ```go
-import s3helper "bitbucket.org/paycloudid/paycloudhelper/sdk/services/s3minio/helper"
+import s3helper "github.com/PayCloud-ID/paycloudhelper/sdk/services/s3minio/helper"
 
 // Adapter implements s3helper.Downloader by mapping to local gRPC client code.
 type Adapter struct{}
@@ -576,7 +576,7 @@ Consumer services should treat this as a coordinated migration, not only a modul
 
 1. Update module dependency:
    ```bash
-   go get bitbucket.org/paycloudid/paycloudhelper@v2.0.0
+   go get github.com/PayCloud-ID/paycloudhelper@v2.0.0
    go mod tidy
    ```
 2. Replace direct Redis imports from `github.com/go-redis/redis/v8` to `github.com/redis/go-redis/v9`.

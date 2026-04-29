@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"bitbucket.org/paycloudid/paycloudhelper/sdk/services/s3minio/helper"
+	"github.com/PayCloud-ID/paycloudhelper/sdk/services/s3minio/helper"
 )
 
 type Client struct {
