@@ -613,7 +613,7 @@ If any step fails, the pipeline fails. Fix the code and push again.
 1. In Bitbucket: **Repository settings → Branch restrictions**.
 2. Add a restriction for `main` (and optionally `develop`): **Require passing pipelines** (and/or require pull requests). Then merges to that branch only succeed when the pipeline is green.
 
-Pipeline config: `bitbucket-pipelines.yml` in the repo root.
+Pipeline config: GitHub Actions workflows in `.github/workflows/`.
 
 ---
 

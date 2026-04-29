@@ -7,12 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## Unreleased
-
-### Added
-
-### Changed
-
 ## [v1.10.0](https://github.com/PayCloud-ID/paycloudhelper/compare/v1.9.0..v1.10.0) - 2026-04-24
 
 ### Changed (Breaking)
@@ -77,62 +71,76 @@ and Bitbucket pipeline (merged statements ~71% with default `COVERAGE_PKGS`
 after redis locks, `phtrace.Init`, HTTP bridge tests, CSRF validation, and
 config validation with live Redis options).
 
+## [v1.9.1] - 2026-04-29
+
+### Changed
+
+- Migrated module identity from `bitbucket.org/paycloudid/paycloudhelper` to
+  `github.com/PayCloud-ID/paycloudhelper` across all package imports.
+- Updated repository documentation and agent guidance to use GitHub module and
+  import examples consistently.
+
+### Fixed
+
+- Resolved mixed-module import breakage risk by removing remaining Bitbucket
+  import paths from runtime and test code.
+
 ## [v1.9.0](https://github.com/PayCloud-ID/paycloudhelper/compare/v1.8.1..v1.9.0) - 2026-04-22
 
 ### Added
 
 - **New `phtrace` subpackage**: OpenTelemetry tracing and metrics helpers for
-PayCloud services supporting Grafana Tempo/Loki/Prometheus backend via OTLP
-gRPC.
+  PayCloud services supporting Grafana Tempo/Loki/Prometheus backend via OTLP
+  gRPC.
   - `phtrace.Config` + `FromEnv(opts ...Option)`: env-driven configuration with
-  functional options (`WithServiceName`, `WithServiceVersion`, `WithEndpoint`,
-  `WithInsecure`, `WithSamplingRatio`, `WithEnvironment`, `WithEnabled`,
-  `WithResourceAttribute`). Env vars: `OTEL_ENABLED`, `OTEL_SERVICE_NAME`,
-  `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_INSECURE`,
-  `OTEL_TRACES_SAMPLER_ARG`, `OTEL_DIAL_TIMEOUT`, `OTEL_BATCH_TIMEOUT`,
-  `OTEL_METRIC_EXPORT_INTERVAL`, `OTEL_RESOURCE_ATTRIBUTES`.
+    functional options (`WithServiceName`, `WithServiceVersion`, `WithEndpoint`,
+    `WithInsecure`, `WithSamplingRatio`, `WithEnvironment`, `WithEnabled`,
+    `WithResourceAttribute`). Env vars: `OTEL_ENABLED`, `OTEL_SERVICE_NAME`,
+    `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_INSECURE`,
+    `OTEL_TRACES_SAMPLER_ARG`, `OTEL_DIAL_TIMEOUT`, `OTEL_BATCH_TIMEOUT`,
+    `OTEL_METRIC_EXPORT_INTERVAL`, `OTEL_RESOURCE_ATTRIBUTES`.
   - `phtrace.Init(ctx, cfg) (Shutdown, error)`: one-shot initialization with
-  `sync.Once`, OTLP gRPC trace + metric exporters, parent-based trace
-  sampling, W3C TraceContext + Baggage propagation, `otel.SetErrorHandler`
-  wiring. Returns `Shutdown` closure safe to call multiple times.
+    `sync.Once`, OTLP gRPC trace + metric exporters, parent-based trace
+    sampling, W3C TraceContext + Baggage propagation, `otel.SetErrorHandler`
+    wiring. Returns `Shutdown` closure safe to call multiple times.
   - `phtrace.IsEnabled()`, `phtrace.Tracer(name)`, `phtrace.Meter(name)`,
-  `phtrace.Propagator()`, `phtrace.Resource()`: zero-cost helpers that
-  return no-op providers when OTel is disabled (so consumer code stays the
-  same in dev and prod).
+    `phtrace.Propagator()`, `phtrace.Resource()`: zero-cost helpers that
+    return no-op providers when OTel is disabled (so consumer code stays the
+    same in dev and prod).
   - `phtrace.AMQPCarrier` + `InjectAMQP(ctx, headers)` / `ExtractAMQP(ctx, headers)`:
-  W3C `traceparent` propagation over `amqp091-go` headers for cross-service
-  RabbitMQ tracing.
+    W3C `traceparent` propagation over `amqp091-go` headers for cross-service
+    RabbitMQ tracing.
   - `phtrace.PhaseHistogram` + `NewPhaseHistogram(meter, name, buckets)` /
-  `MustPhaseHistogram(...)` + `Record` / `Observe`: preconfigured
-  millisecond-unit histogram with explicit bucket boundaries tuned for
-  QR-MPM phase timing (`qrmpm_phase_duration_ms`). Cached per
-  (meterName, histName).
+    `MustPhaseHistogram(...)` + `Record` / `Observe`: preconfigured
+    millisecond-unit histogram with explicit bucket boundaries tuned for
+    QR-MPM phase timing (`qrmpm_phase_duration_ms`). Cached per
+    (meterName, histName).
   - **Context-aware log helpers** (`log.go`): `LogDCtx`, `LogICtx`, `LogWCtx`,
-  `LogECtx` automatically prepend `[trace_id=... span_id=...]` from the
-  ctx's active span. `phtrace.WithFields(ctx, ...)` returns a
-  `LogContextCtx` for operation-scoped logging with trace enrichment;
-  `LogE`/`LogECtx` additionally call `span.RecordError` on the active span.
+    `LogECtx` automatically prepend `[trace_id=... span_id=...]` from the
+    ctx's active span. `phtrace.WithFields(ctx, ...)` returns a
+    `LogContextCtx` for operation-scoped logging with trace enrichment;
+    `LogE`/`LogECtx` additionally call `span.RecordError` on the active span.
   - **Canonical log field keys** for Loki query consistency:
-  `FieldTraceID`, `FieldSpanID`, `FieldTicketID`, `FieldReffNo`,
-  `FieldMerchantID`, `FieldOrderID`, `FieldTrxID`, `FieldTrxNo`,
-  `FieldService`, `FieldRoute`, `FieldVendor`.
+    `FieldTraceID`, `FieldSpanID`, `FieldTicketID`, `FieldReffNo`,
+    `FieldMerchantID`, `FieldOrderID`, `FieldTrxID`, `FieldTrxNo`,
+    `FieldService`, `FieldRoute`, `FieldVendor`.
 - **Tests**: `phtrace/{config,rmqprop,log,metrics}_test.go` cover env parsing,
-defaults, carrier round-trip with the standard TraceContext propagator,
-prefix building with/without spans, and histogram caching / nil-safe
-behavior. All tests pass under `go test -race ./phtrace/...`.
+  defaults, carrier round-trip with the standard TraceContext propagator,
+  prefix building with/without spans, and histogram caching / nil-safe
+  behavior. All tests pass under `go test -race ./phtrace/...`.
 
 ### Dependencies
 
 - Added OpenTelemetry SDK (indirect `go.opentelemetry.io/otel@v1.43.0`):
-`otel`, `otel/trace`, `otel/metric`, `otel/propagation`, `otel/sdk`,
-`otel/sdk/metric`, `otel/exporters/otlp/otlptrace{,grpc}`,
-`otel/exporters/otlp/otlpmetric{,grpc}`, `otel/semconv/v1.26.0`.
+  `otel`, `otel/trace`, `otel/metric`, `otel/propagation`, `otel/sdk`,
+  `otel/sdk/metric`, `otel/exporters/otlp/otlptrace{,grpc}`,
+  `otel/exporters/otlp/otlpmetric{,grpc}`, `otel/semconv/v1.26.0`.
 - Bumped `google.golang.org/grpc` from v1.76.0 to v1.80.0 transitively.
 
 ### Compatibility
 
 - New subpackage only. No existing symbols touched; services that do not
-import `github.com/PayCloud-ID/paycloudhelper/phtrace` are unaffected.
+  import `github.com/PayCloud-ID/paycloudhelper/phtrace` are unaffected.
 - Backward compatible (MINOR): SemVer MINOR bump to v1.9.0.
 
 ## [v1.8.2] - 2026-04-23
@@ -162,18 +170,18 @@ import `github.com/PayCloud-ID/paycloudhelper/phtrace` are unaffected.
 
 ### Added
 
-- `**AuditTrailTrx` transaction audit trail** (`audittrail_trx_entities.go`, `audittrail_trx.go`):
-Dedicated transaction lifecycle audit with structured `AuditTrailTrx` type, 15 lifecycle
-state constants (`AuditTrxState*`), 4 status constants (`AuditTrxStatus*`), command constant
-`CmdAuditTrailTrx`, and extensible `Metadata` field.
-- `**SetUpAuditTrailTrxPublisher()`**: Creates separate AMQP client + `AuditPublisher` worker pool
-for transaction audit. Supports enable/disable via first parameter and reuses existing
-functional options.
-- `**LogAuditTrailTrx(data AuditTrailTrx)`**: One-call audit publishing. Auto-sets `Service`
-from `AppName` and `EventTime` from `time.Now()`. Requires at least one of `ReffNo`/`OrderNo`.
-- `**IsAuditTrailTrxEnabled()` / `GetAuditTrailTrxPublisher()`**: Status checks and lifecycle access.
+- **`AuditTrailTrx` transaction audit trail** (`audittrail_trx_entities.go`, `audittrail_trx.go`):
+  Dedicated transaction lifecycle audit with structured `AuditTrailTrx` type, 15 lifecycle
+  state constants (`AuditTrxState*`), 4 status constants (`AuditTrxStatus*`), command constant
+  `CmdAuditTrailTrx`, and extensible `Metadata` field.
+- **`SetUpAuditTrailTrxPublisher()`**: Creates separate AMQP client + `AuditPublisher` worker pool
+  for transaction audit. Supports enable/disable via first parameter and reuses existing
+  functional options.
+- **`LogAuditTrailTrx(data AuditTrailTrx)`**: One-call audit publishing. Auto-sets `Service`
+  from `AppName` and `EventTime` from `time.Now()`. Requires at least one of `ReffNo`/`OrderNo`.
+- **`IsAuditTrailTrxEnabled()` / `GetAuditTrailTrxPublisher()`**: Status checks and lifecycle access.
 - **Unit tests** (`audittrail_trx_test.go`): Entity constants, publisher setup, enable/disable,
-correlation validation, auto-defaults, metadata passthrough, concurrent safety, unique IDs.
+  correlation validation, auto-defaults, metadata passthrough, concurrent safety, unique IDs.
 
 ## [v1.8.0-beta.2](https://github.com/PayCloud-ID/paycloudhelper/compare/v1.7.1-beta.1..v1.8.0-beta.2) - 2026-04-14
 
@@ -210,7 +218,7 @@ correlation validation, auto-defaults, metadata passthrough, concurrent safety, 
   - Bitbucket Pipelines (`bitbucket-pipelines.yml`): on every push to `develop` and `main` (and default branches), run `buf lint`, `make ci.check.direct-http`, `make ci.check.stub-drift`, `go build ./...`, `go vet ./...`, `go test ./...`. Pipeline fails if any step fails.
 - `**helper.ProbeObserveFunc` / `ObserveProbe()`** (`sdk/services/s3minio/helper/observe.go`): Optional hook for gRPC health/readiness latency and HTTP status codes without importing `pchelper` from the transport layer; `grpc` adapter calls it after probes.
 - **Documentation**
-  - README: **Testing** section (run script, options, coverage, code quality); **Verifying the library** (build/vet/test checklist); **CI (Bitbucket Pipelines)** (how CI runs and how to require passing pipeline for merges).
+  - README: **Testing** section (run script, options, coverage, code quality); **Verifying the library** (build/vet/test checklist); **CI** (how CI runs and how to require passing checks for merges).
   - `docs/sdk/s3minio-probe-observe-wiring.md`: Example wiring of `helper.ProbeObserveFunc` from a consumer `main` (after logger init).
 
 ### Changed
@@ -259,3 +267,6 @@ History before this changelog was introduced. See git tags and release notes for
 Retracted versions (do not use): v1.6.3, v1.6.0, v1.5.2 — see `go.mod` retract block.
 
 [v1.8.2]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.8.1..v1.8.2
+[v1.8.1]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.8.0-beta.2..v1.8.1
+[v1.8.0-beta.2]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.7.1-beta.1..v1.8.0-beta.2
+[1.7.1-beta.1]: https://github.com/PayCloud-ID/paycloudhelper/tree/v1.7.1-beta.1

@@ -335,7 +335,7 @@ go vet ./...
 git tag v1.x.y && git push origin v1.x.y
 
 # Consumer updates
-go get github.com/PayCloud-ID/paycloudhelper@v2.0.0 && go mod tidy
+go get github.com/PayCloud-ID/paycloudhelper@v1.x.y && go mod tidy
 ```
 
 ## Agent Compatibility
