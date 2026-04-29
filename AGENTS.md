@@ -13,7 +13,7 @@
 
 ## Repository Overview
 
-**Go shared library** (`bitbucket.org/paycloudid/paycloudhelper`) providing common utilities to all PayCloud Hub microservices. This is **not a standalone service** — it is imported by ~30 consumer services.
+**Go shared library** (`github.com/PayCloud-ID/paycloudhelper`) providing common utilities to all PayCloud Hub microservices. This is **not a standalone service** — it is imported by ~30 consumer services.
 
 - **Go 1.23** + toolchain 1.24.3
 - **Auto-initializes** on import via `init()` → consumer services call explicit init functions for Redis/RabbitMQ/Sentry
@@ -74,7 +74,7 @@ Consumers must use the **root package** with alias `pchelper`; only other payclo
 
 ```go
 // ✅ Root package alias in consumer services
-import pchelper "bitbucket.org/paycloudid/paycloudhelper"
+import pchelper "github.com/PayCloud-ID/paycloudhelper"
 
 // ✅ Methods: [ReceiverType.MethodName]
 pchelper.LogI("[Server.initializeConnections] gRPC connected host=%s", host)
@@ -87,7 +87,7 @@ pchelper.LogI("[InitRedis] connected port=%s", port)
 pchelper.LogErr(err)
 
 // ❌ Never in consumer code
-import "bitbucket.org/paycloudid/paycloudhelper/phlogger"
+import "github.com/PayCloud-ID/paycloudhelper/phlogger"
 log.Println("message")
 fmt.Println("debug")
 pchelper.LogE("error=%v", err)  // missing [Type.FuncName] prefix
@@ -213,7 +213,7 @@ Paycloudhelper integrates **structured logging with Sentry** (SDK v0.33.0+) to f
 **Setup (consumer service):**
 
 ```go
-import pchelper "bitbucket.org/paycloudid/paycloudhelper"
+import pchelper "github.com/PayCloud-ID/paycloudhelper"
 
 // 1. Initialize Sentry (early in startup)
 pchelper.InitSentry(pchelper.SentryOptions{
@@ -325,7 +325,7 @@ go vet ./...
 git tag v1.x.y && git push origin v1.x.y
 
 # Consumer updates
-go get bitbucket.org/paycloudid/paycloudhelper@v1.x.y && go mod tidy
+go get github.com/PayCloud-ID/paycloudhelper@v1.x.y && go mod tidy
 ```
 
 ## Agent Compatibility

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.9.1] - 2026-04-29
+
+### Changed
+
+- Migrated module identity from `bitbucket.org/paycloudid/paycloudhelper` to
+  `github.com/PayCloud-ID/paycloudhelper` across all package imports.
+- Updated repository documentation and agent guidance to use GitHub module and
+  import examples consistently.
+
+### Fixed
+
+- Resolved mixed-module import breakage risk by removing remaining Bitbucket
+  import paths from runtime and test code.
+
 ## [v1.9.0] - 2026-04-22
 
 ### Added
@@ -62,7 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Compatibility
 
 - New subpackage only. No existing symbols touched; services that do not
-  import `bitbucket.org/paycloudid/paycloudhelper/phtrace` are unaffected.
+  import `github.com/PayCloud-ID/paycloudhelper/phtrace` are unaffected.
 - Backward compatible (MINOR): SemVer MINOR bump to v1.9.0.
 
 ## [v1.8.2] - 2026-04-23
@@ -141,10 +155,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Root `Makefile` — `help`, `deps`, `build`, `vet`, `test`, `test-race`, `test-cover`, `fmt`, `clean`.
   - Root `run.sh` — for this library repo, runs `go test -race ./...` (`--debug` sets `GODEBUG`).
 - **CI**
-  - Bitbucket Pipelines (`bitbucket-pipelines.yml`): on every push to `develop` and `main` (and default branches), run `buf lint`, `make ci.check.direct-http`, `make ci.check.stub-drift`, `go build ./...`, `go vet ./...`, `go test ./...`. Pipeline fails if any step fails.
+  - GitHub Actions: on every push to active branches, run `buf lint`, `make ci.check.direct-http`, `make ci.check.stub-drift`, `go build ./...`, `go vet ./...`, `go test ./...`. Workflow fails if any step fails.
 - **`helper.ProbeObserveFunc` / `ObserveProbe()`** (`sdk/services/s3minio/helper/observe.go`): Optional hook for gRPC health/readiness latency and HTTP status codes without importing `pchelper` from the transport layer; `grpc` adapter calls it after probes.
 - **Documentation**
-  - README: **Testing** section (run script, options, coverage, code quality); **Verifying the library** (build/vet/test checklist); **CI (Bitbucket Pipelines)** (how CI runs and how to require passing pipeline for merges).
+  - README: **Testing** section (run script, options, coverage, code quality); **Verifying the library** (build/vet/test checklist); **CI** (how CI runs and how to require passing checks for merges).
   - `docs/sdk/s3minio-probe-observe-wiring.md`: Example wiring of `helper.ProbeObserveFunc` from a consumer `main` (after logger init).
 
 ### Changed
@@ -193,7 +207,7 @@ History before this changelog was introduced. See git tags and release notes for
 
 Retracted versions (do not use): v1.6.3, v1.6.0, v1.5.2 — see `go.mod` retract block.
 
-[v1.8.1]: https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.8.0-beta.2..v1.8.1
-[v1.8.2]: https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.8.1..v1.8.2
-[v1.8.0-beta.2]: https://bitbucket.org/paycloudid/paycloudhelper/compare/v1.7.1-beta.1..v1.8.0-beta.2
-[1.7.1-beta.1]: https://bitbucket.org/paycloudid/paycloudhelper/src/v1.7.1-beta.1
+[v1.8.1]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.8.0-beta.2..v1.8.1
+[v1.8.2]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.8.1..v1.8.2
+[v1.8.0-beta.2]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.7.1-beta.1..v1.8.0-beta.2
+[1.7.1-beta.1]: https://github.com/PayCloud-ID/paycloudhelper/tree/v1.7.1-beta.1

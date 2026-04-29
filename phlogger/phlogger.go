@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"bitbucket.org/paycloudid/paycloudhelper/phhelper"
+	"github.com/PayCloud-ID/paycloudhelper/phhelper"
 	"github.com/kataras/golog"
 	"github.com/kataras/pio"
 )

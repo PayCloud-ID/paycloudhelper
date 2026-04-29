@@ -2,7 +2,7 @@
 
 **Go shared library** — common utilities for all PayCloud Hub microservices.
 
-Module: `bitbucket.org/paycloudid/paycloudhelper`  
+Module: `github.com/PayCloud-ID/paycloudhelper`  
 Go: 1.24
 
 ---
@@ -15,7 +15,7 @@ Go: 1.24
 - [Configuration](#configuration)
 - [Testing](#testing)
 - [Verifying the library](#verifying-the-library)
-- [CI (Bitbucket Pipelines)](#ci-bitbucket-pipelines)
+- [CI](#ci)
 - [Versioning](#versioning)
 - [Contributing](#contributing)
 
@@ -43,7 +43,7 @@ Consumer must explicitly call:
 ## Quick Start
 
 ```go
-import pch "bitbucket.org/paycloudid/paycloudhelper"
+import pch "github.com/PayCloud-ID/paycloudhelper"
 
 // In main() — after godotenv.Load()
 pch.InitializeRedisWithRetry(pch.RedisInitOptions{...})
@@ -85,7 +85,7 @@ pch.ConfigureLogForwarding(pch.LogForwardConfig{
 
 ### Logging
 
-Import the root package (e.g. `import pch "bitbucket.org/paycloudid/paycloudhelper"`). **Do not import `phlogger` directly in consumer services.** Every log line must include the caller in square brackets: use `[Type.MethodName]` for methods (e.g. `[Server.Start]`) and `[FuncName]` for plain functions. Prefer key=value style after the prefix.
+Import the root package (e.g. `import pch "github.com/PayCloud-ID/paycloudhelper"`). **Do not import `phlogger` directly in consumer services.** Every log line must include the caller in square brackets: use `[Type.MethodName]` for methods (e.g. `[Server.Start]`) and `[FuncName]` for plain functions. Prefer key=value style after the prefix.
 
 ```go
 pch.LogI("[FuncName] started id=%s", id)    // Info — or [Server.Start] for methods
@@ -297,7 +297,7 @@ The service-scoped helper centralizes repeated request-building and response-val
 It is transport-neutral and used by both gRPC and HTTP bridge adapters in the same SDK namespace.
 
 ```go
-import s3helper "bitbucket.org/paycloudid/paycloudhelper/sdk/services/s3minio/helper"
+import s3helper "github.com/PayCloud-ID/paycloudhelper/sdk/services/s3minio/helper"
 
 // Adapter implements s3helper.Downloader by mapping to local gRPC client code.
 type Adapter struct{}
@@ -471,7 +471,7 @@ Or use the script: `./scripts/run_tests.sh` (add `-race` for race detection).
 
 ---
 
-## CI (Bitbucket Pipelines)
+## CI
 
 Every push to **develop** and **main** runs a pipeline that:
 
@@ -486,7 +486,7 @@ If any step fails, the pipeline fails. Fix the code and push again.
 1. In Bitbucket: **Repository settings → Branch restrictions**.
 2. Add a restriction for `main` (and optionally `develop`): **Require passing pipelines** (and/or require pull requests). Then merges to that branch only succeed when the pipeline is green.
 
-Pipeline config: `bitbucket-pipelines.yml` in the repo root.
+Pipeline config: GitHub Actions workflows in `.github/workflows/`.
 
 ---
 

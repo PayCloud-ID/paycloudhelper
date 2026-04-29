@@ -3,9 +3,9 @@ package facade
 import (
 	"testing"
 
-	sdkgrpc "bitbucket.org/paycloudid/paycloudhelper/sdk/services/s3minio/grpc"
-	sdkhttp "bitbucket.org/paycloudid/paycloudhelper/sdk/services/s3minio/http"
-	"bitbucket.org/paycloudid/paycloudhelper/sdk/services/s3minio/helper"
+	sdkgrpc "github.com/PayCloud-ID/paycloudhelper/sdk/services/s3minio/grpc"
+	sdkhttp "github.com/PayCloud-ID/paycloudhelper/sdk/services/s3minio/http"
+	"github.com/PayCloud-ID/paycloudhelper/sdk/services/s3minio/helper"
 )
 
 // TestFacadeGRPCReturnsHelperClient verifies NewGRPC returns a type

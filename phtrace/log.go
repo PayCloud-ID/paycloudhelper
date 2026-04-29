@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"bitbucket.org/paycloudid/paycloudhelper/phlogger"
+	"github.com/PayCloud-ID/paycloudhelper/phlogger"
 	"go.opentelemetry.io/otel/trace"
 )
 

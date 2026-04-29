@@ -13,12 +13,17 @@
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+coverage-func.txt
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
 # Go workspace file
 go.work
+
+# Agent / local planning artifacts (not versioned)
+.agents/plans/
+/docs/plans/*
 
 # IDE file
 .idea

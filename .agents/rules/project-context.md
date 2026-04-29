@@ -2,13 +2,13 @@
 
 ## Purpose
 
-`bitbucket.org/paycloudid/paycloudhelper` is a **Go shared library** — not a standalone service. It provides common utilities (middleware, Redis, logging, RabbitMQ, response helpers) imported by all PayCloud Hub microservices.
+`github.com/PayCloud-ID/paycloudhelper` is a **Go shared library** — not a standalone service. It provides common utilities (middleware, Redis, logging, RabbitMQ, response helpers) imported by all PayCloud Hub microservices.
 
 ## Module Identity
 
 | Item | Value |
 |------|-------|
-| Module | `bitbucket.org/paycloudid/paycloudhelper` |
+| Module | `github.com/PayCloud-ID/paycloudhelper` |
 | Go version | `1.23` + toolchain `1.24.3` |
 | Library type | Shared helper — consumers import it |
 
@@ -71,7 +71,7 @@ LogE("[MerchantController.GetMerchant] gRPC error code=%s err=%v", code, err)
 LogI("[InitRedis] connected port=%s", port)
 
 // ❌ Never in consumers: direct phlogger import, stdlib log/fmt, or missing [Type.FuncName]
-import "bitbucket.org/paycloudid/paycloudhelper/phlogger"
+import "github.com/PayCloud-ID/paycloudhelper/phlogger"
 log.Println("message")
 LogE("error=%v", err)
 ```

@@ -3,7 +3,7 @@ package paycloudhelper
 import (
 	"testing"
 
-	"bitbucket.org/paycloudid/paycloudhelper/phlogger"
+	"github.com/PayCloud-ID/paycloudhelper/phlogger"
 )
 
 func TestRootLogI_FiresHooks(t *testing.T) {

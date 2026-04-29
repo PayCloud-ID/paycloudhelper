@@ -1,4 +1,4 @@
-module bitbucket.org/paycloudid/paycloudhelper
+module github.com/PayCloud-ID/paycloudhelper
 
 go 1.25.0
 

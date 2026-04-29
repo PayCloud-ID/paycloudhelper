@@ -12,7 +12,7 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
-	"bitbucket.org/paycloudid/paycloudhelper/phhelper"
+	"github.com/PayCloud-ID/paycloudhelper/phhelper"
 )
 
 // Push retry and timeout configuration.
