@@ -67,8 +67,10 @@ func NewPhaseHistogram(meterName, histName string, buckets []float64) (*PhaseHis
 	return ph, nil
 }
 
-// MustPhaseHistogram is like NewPhaseHistogram but panics on error. Use at
-// package init where an instrument failure indicates a programming mistake.
+// MustPhaseHistogram is like NewPhaseHistogram but panics on error. Use only at
+// process startup for instrumentation registration mistakes; it is not intended
+// for network or broker I/O paths — use [NewPhaseHistogram] when errors should
+// propagate to the caller.
 func MustPhaseHistogram(meterName, histName string, buckets []float64) *PhaseHistogram {
 	h, err := NewPhaseHistogram(meterName, histName, buckets)
 	if err != nil {

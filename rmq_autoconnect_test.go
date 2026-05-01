@@ -2,10 +2,13 @@ package paycloudhelper
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+
+	"github.com/PayCloud-ID/paycloudhelper/phlogger"
 )
 
 type stubRqAutoConnect struct {
@@ -27,12 +30,12 @@ func TestRMqAutoConnect_connect_respectsMaxTrialsForTest(t *testing.T) {
 	prevDial := rmqDialHook
 	prevAfter := rmqAfterHook
 	prevChannel := rmqChannelHook
-	prevMax := rmqConnectMaxTrialsForTest
+	prevMax := rmqConnectMaxTrialsForTest.Load()
 	t.Cleanup(func() {
 		rmqDialHook = prevDial
 		rmqAfterHook = prevAfter
 		rmqChannelHook = prevChannel
-		rmqConnectMaxTrialsForTest = prevMax
+		rmqConnectMaxTrialsForTest.Store(prevMax)
 	})
 
 	var dials int
@@ -48,7 +51,7 @@ func TestRMqAutoConnect_connect_respectsMaxTrialsForTest(t *testing.T) {
 		close(ch)
 		return ch
 	}
-	rmqConnectMaxTrialsForTest = 3
+	rmqConnectMaxTrialsForTest.Store(3)
 
 	_, err := r.connect("amqp://u:p@host:5672/v")
 	if err == nil {
@@ -69,11 +72,11 @@ func TestRMqAutoConnect_connect_exercisesBackoffBranches(t *testing.T) {
 	r := &rMqAutoConnect{}
 	prevDial := rmqDialHook
 	prevAfter := rmqAfterHook
-	prevMax := rmqConnectMaxTrialsForTest
+	prevMax := rmqConnectMaxTrialsForTest.Load()
 	t.Cleanup(func() {
 		rmqDialHook = prevDial
 		rmqAfterHook = prevAfter
-		rmqConnectMaxTrialsForTest = prevMax
+		rmqConnectMaxTrialsForTest.Store(prevMax)
 	})
 
 	var dials int
@@ -89,7 +92,7 @@ func TestRMqAutoConnect_connect_exercisesBackoffBranches(t *testing.T) {
 
 	// maxTrialSecond=3, maxTrialMinute=7; running 9 trials exercises:
 	// - 30s branch (1-3), 10m branch (4-7), 1h branch (8+).
-	rmqConnectMaxTrialsForTest = 9
+	rmqConnectMaxTrialsForTest.Store(9)
 	_, err := r.connect("amqp://u:p@host:5672/v")
 	if err == nil {
 		t.Fatal("expected error")
@@ -135,6 +138,73 @@ func TestRMqAutoConnect_GetRqChannel_beforeAfter(t *testing.T) {
 	r.afterReconnect()
 	if st.beforeN != 1 || st.afterN != 1 {
 		t.Fatalf("before=%d after=%d", st.beforeN, st.afterN)
+	}
+}
+
+func TestRedactAMQPURIForLog(t *testing.T) {
+	got := redactAMQPURIForLog("broker.example", "5672", "myvhost")
+	want := "amqp://***:***@broker.example:5672/myvhost"
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestRMqAutoConnect_startConnection_logDoesNotLeakCredentials(t *testing.T) {
+	phlogger.ClearLogHooks()
+	var msgs []string
+	phlogger.RegisterLogHook("info", func(_, msg string) {
+		msgs = append(msgs, msg)
+	})
+	t.Cleanup(phlogger.ClearLogHooks)
+
+	r := &rMqAutoConnect{}
+	prevDial := rmqDialHook
+	prevAfter := rmqAfterHook
+	prevChannel := rmqChannelHook
+	prevNotify := rmqNotifyCloseHook
+	prevCloseCh := rmqChannelCloseHook
+	prevCloseConn := rmqConnCloseHook
+	t.Cleanup(func() {
+		rmqDialHook = prevDial
+		rmqAfterHook = prevAfter
+		rmqChannelHook = prevChannel
+		rmqNotifyCloseHook = prevNotify
+		rmqChannelCloseHook = prevCloseCh
+		rmqConnCloseHook = prevCloseConn
+	})
+
+	rmqDialHook = func(string, amqp.Config) (*amqp.Connection, error) { return &amqp.Connection{}, nil }
+	rmqAfterHook = func(time.Duration) <-chan time.Time { ch := make(chan time.Time); close(ch); return ch }
+	rmqChannelHook = func(*amqp.Connection) (*amqp.Channel, error) { return &amqp.Channel{}, nil }
+	rmqChannelCloseHook = func(*amqp.Channel) error { return nil }
+	rmqConnCloseHook = func(*amqp.Connection) error { return nil }
+
+	notify := make(chan *amqp.Error, 1)
+	rmqNotifyCloseHook = func(*amqp.Connection, chan *amqp.Error) <-chan *amqp.Error { return notify }
+
+	st := &stubRqAutoConnect{}
+	r.rq = st
+	secretPass := "secret-password-do-not-log"
+	secretUser := "svc_audit_user"
+	if err := r.startConnection(secretUser, secretPass, "h.example", "5672", "vh"); err != nil {
+		t.Fatalf("startConnection: %v", err)
+	}
+	r.stop()
+
+	for _, m := range msgs {
+		if strings.Contains(m, secretPass) || strings.Contains(m, secretUser) {
+			t.Fatalf("log message must not contain credentials: %q", m)
+		}
+	}
+	var sawRedacted bool
+	for _, m := range msgs {
+		if strings.Contains(m, "***:***@") && strings.Contains(m, "h.example") {
+			sawRedacted = true
+			break
+		}
+	}
+	if !sawRedacted {
+		t.Fatalf("expected redacted connection log; msgs=%v", msgs)
 	}
 }
 

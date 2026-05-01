@@ -567,7 +567,7 @@ func TestAmqpClient_handleReInit_reRunsInitOnChannelClose(t *testing.T) {
 		close(c.done)
 	}()
 
-	if done := c.handleReInit(nil); !done {
+	if done := c.handleReInit(nil, nil); !done {
 		t.Fatal("expected handleReInit to return true after done closed")
 	}
 	if calls.Load() < 2 {
@@ -591,7 +591,7 @@ func TestAmqpClient_handleReInit_returnsFalseOnConnCloseSignal(t *testing.T) {
 		c.notifyConnClose <- &amqp.Error{Code: 320, Reason: "conn closed"}
 	}()
 
-	if done := c.handleReInit(nil); done {
+	if done := c.handleReInit(nil, nil); done {
 		t.Fatal("expected handleReInit to return false on notifyConnClose signal")
 	}
 }
@@ -600,11 +600,11 @@ func TestAmqpClient_handleReInit_returnsFalseOnConnCloseSignal(t *testing.T) {
 // dial-failure loop without waiting for production reconnectDelay.
 func TestNewAmqp_nonNilClient_retriesDialWithTestBackoff(t *testing.T) {
 	prevDial := amqpDialHook
-	prevBackoff := amqpReconnectDelayForTest
+	prevBackoff := amqpReconnectDelayForTestNs.Load()
 	var c *AmqpClient
 	t.Cleanup(func() {
 		amqpDialHook = prevDial
-		amqpReconnectDelayForTest = prevBackoff
+		amqpReconnectDelayForTestNs.Store(prevBackoff)
 		if c != nil {
 			select {
 			case <-c.done:
@@ -619,7 +619,7 @@ func TestNewAmqp_nonNilClient_retriesDialWithTestBackoff(t *testing.T) {
 		dials.Add(1)
 		return nil, errors.New("no broker")
 	}
-	amqpReconnectDelayForTest = 4 * time.Millisecond
+	amqpReconnectDelayForTestNs.Store(uint64((4 * time.Millisecond).Nanoseconds()))
 
 	c = defaultAmqpClient()
 	c.queueName = "q"
@@ -638,11 +638,11 @@ func TestNewAmqp_nonNilClient_retriesDialWithTestBackoff(t *testing.T) {
 // TestNewAmqpClient_retriesDialWithTestBackoff mirrors NewAmqp for the constructor path.
 func TestNewAmqpClient_retriesDialWithTestBackoff(t *testing.T) {
 	prevDial := amqpDialHook
-	prevBackoff := amqpReconnectDelayForTest
+	prevBackoff := amqpReconnectDelayForTestNs.Load()
 	var c *AmqpClient
 	t.Cleanup(func() {
 		amqpDialHook = prevDial
-		amqpReconnectDelayForTest = prevBackoff
+		amqpReconnectDelayForTestNs.Store(prevBackoff)
 		if c != nil {
 			select {
 			case <-c.done:
@@ -657,7 +657,7 @@ func TestNewAmqpClient_retriesDialWithTestBackoff(t *testing.T) {
 		dials.Add(1)
 		return nil, errors.New("no broker")
 	}
-	amqpReconnectDelayForTest = 4 * time.Millisecond
+	amqpReconnectDelayForTestNs.Store(uint64((4 * time.Millisecond).Nanoseconds()))
 
 	c = NewAmqpClient("q", "c", "amqp://127.0.0.1:59999/", defaultAmqpConfig())
 

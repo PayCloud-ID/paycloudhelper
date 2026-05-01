@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -117,34 +118,41 @@ var (
 // amqpDialHook connects to the broker. Package tests may replace it to avoid real TCP dials.
 var amqpDialHook = defaultAmqpDial
 
-// amqpReconnectDelayForTest, when > 0, replaces reconnectDelay after failed dials (tests only).
-var amqpReconnectDelayForTest time.Duration
-
-// amqpReinitDelayForTest, when > 0, replaces reInitDelay in handleReInit retry loops (tests only).
-var amqpReinitDelayForTest time.Duration
-
-// amqpResendDelayForTest, when > 0, replaces resendDelay between Push retries (tests only).
-var amqpResendDelayForTest time.Duration
+// Test-only delay overrides (nanoseconds). Zero means use production defaults.
+// Stored in atomics so reconnect goroutines and test cleanup do not race under -race.
+var amqpReconnectDelayForTestNs atomic.Uint64
+var amqpReinitDelayForTestNs atomic.Uint64
+var amqpResendDelayForTestNs atomic.Uint64
 
 func amqpReconnectSleep() time.Duration {
-	if amqpReconnectDelayForTest > 0 {
-		return amqpReconnectDelayForTest
+	if ns := amqpReconnectDelayForTestNs.Load(); ns > 0 {
+		return time.Duration(ns)
 	}
 	return reconnectDelay
 }
 
 func amqpReinitSleep() time.Duration {
-	if amqpReinitDelayForTest > 0 {
-		return amqpReinitDelayForTest
+	if ns := amqpReinitDelayForTestNs.Load(); ns > 0 {
+		return time.Duration(ns)
 	}
 	return reInitDelay
 }
 
 func amqpResendSleep() time.Duration {
-	if amqpResendDelayForTest > 0 {
-		return amqpResendDelayForTest
+	if ns := amqpResendDelayForTestNs.Load(); ns > 0 {
+		return time.Duration(ns)
 	}
 	return resendDelay
+}
+
+// drainTimerChan drains t.C if Stop reports the timer already fired (Reset safety).
+func drainTimerChan(t *time.Timer) {
+	if !t.Stop() {
+		select {
+		case <-t.C:
+		default:
+		}
+	}
 }
 
 func defaultAmqpDial(addr string, cfg amqp.Config) (*amqp.Connection, error) {
@@ -201,6 +209,13 @@ func NewAmqpClient(queueName, connName, addr string, config *amqp.Config) *AmqpC
 // handleReconnect will wait for a connection error on
 // notifyConnClose, and then continuously attempt to reconnect.
 func (c *AmqpClient) handleReconnect(addr string) {
+	var delayTimer *time.Timer
+	defer func() {
+		if delayTimer != nil {
+			drainTimerChan(delayTimer)
+		}
+	}()
+
 	for {
 		c.m.Lock()
 		c.isReady = false
@@ -213,15 +228,22 @@ func (c *AmqpClient) handleReconnect(addr string) {
 		if err != nil {
 			c.errLog.Println("[AMQP] failed to connect. Retrying...")
 
+			d := amqpReconnectSleep()
+			if delayTimer == nil {
+				delayTimer = time.NewTimer(d)
+			} else {
+				drainTimerChan(delayTimer)
+				delayTimer.Reset(d)
+			}
 			select {
 			case <-c.done:
 				return
-			case <-time.After(amqpReconnectSleep()):
+			case <-delayTimer.C:
 			}
 			continue
 		}
 
-		if done := c.handleReInit(conn); done {
+		if done := c.handleReInit(conn, &delayTimer); done {
 			break
 		}
 	}
@@ -241,8 +263,9 @@ func (c *AmqpClient) connect(addr string) (*amqp.Connection, error) {
 }
 
 // handleReInit will wait for a channel error
-// and then continuously attempt to re-initialize both channels
-func (c *AmqpClient) handleReInit(conn *amqp.Connection) bool {
+// and then continuously attempt to re-initialize both channels.
+// If delayTimerPtr is non-nil, the pointed-to timer is reused for init retry sleeps (shared with handleReconnect).
+func (c *AmqpClient) handleReInit(conn *amqp.Connection, delayTimerPtr **time.Timer) bool {
 	for {
 		c.m.Lock()
 		c.isReady = false
@@ -252,13 +275,33 @@ func (c *AmqpClient) handleReInit(conn *amqp.Connection) bool {
 		if err != nil {
 			c.errLog.Println("[AMQP] failed to initialize channel, retrying...")
 
-			select {
-			case <-c.done:
-				return true
-			case <-c.notifyConnClose:
-				c.infoLog.Println("[AMQP] connection closed, reconnecting...")
-				return false
-			case <-time.After(amqpReinitSleep()):
+			d := amqpReinitSleep()
+			if delayTimerPtr != nil {
+				t := *delayTimerPtr
+				if t == nil {
+					t = time.NewTimer(d)
+					*delayTimerPtr = t
+				} else {
+					drainTimerChan(t)
+					t.Reset(d)
+				}
+				select {
+				case <-c.done:
+					return true
+				case <-c.notifyConnClose:
+					c.infoLog.Println("[AMQP] connection closed, reconnecting...")
+					return false
+				case <-t.C:
+				}
+			} else {
+				select {
+				case <-c.done:
+					return true
+				case <-c.notifyConnClose:
+					c.infoLog.Println("[AMQP] connection closed, reconnecting...")
+					return false
+				case <-time.After(d):
+				}
 			}
 			continue
 		}

@@ -1,7 +1,10 @@
 package phjson
 
 import (
+	"bytes"
 	"testing"
+
+	"github.com/bytedance/sonic"
 )
 
 func TestGetConfig_Default(t *testing.T) {
@@ -12,10 +15,23 @@ func TestGetConfig_Default(t *testing.T) {
 }
 
 func TestNewConfig(t *testing.T) {
+	t.Cleanup(func() { NewConfig(&sonic.Config{}) })
 	NewConfig(nil)
 	cfg := GetConfig()
 	if cfg == nil {
 		t.Fatal("GetConfig() after NewConfig(nil) returned nil")
+	}
+}
+
+func TestConfigureForAuditTrail_noHTMLEscape(t *testing.T) {
+	t.Cleanup(func() { NewConfig(&sonic.Config{}) })
+	ConfigureForAuditTrail()
+	b, err := Marshal(map[string]string{"k": "<script>"})
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if bytes.Contains(b, []byte(`\u003c`)) {
+		t.Fatalf("unexpected HTML escape in %s", b)
 	}
 }
 

@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **CI**: `go test -race ./...` in `.github/workflows/ci.yml` to catch concurrency regressions.
+- **Tests**: placeholder tests for `sdk/shared/errors`, `sdk/shared/observability`, and
+  `sdk/shared/transport` (packages reserved for future shared SDK helpers).
+- **`ConfigureAuditJSONMarshal`**: optional hook to replace JSON encoding for audit trail
+  message bodies (`pushMessageAudit`, `AuditPublisher` workers). Default remains
+  `encoding/json` with `SetEscapeHTML(false)` (same as historical `jsonMarshalNoEsc`).
+- **`phjson.ConfigureForAuditTrail`**: freezes sonic with `EscapeHTML: false` for parity
+  when opting into `phjson.Marshal` for audit payloads.
+
+### Changed
+
+- **AMQP reconnect / re-init**: reuse one `time.Timer` with `Reset` in hot loops instead of
+  allocating via `time.After` each iteration (reduces timer churn under backoff).
+- **`rMqAutoConnect`**: protect `conn`, `ch`, `notifCloseCh`, and URI with a mutex;
+  `stop()` waits on a `WaitGroup` for the reconnect goroutine; `startConnection` and
+  channel setup return errors instead of panicking or fatalling.
+- **AMQP test hooks**: package-level reconnect/reinit/resend delay overrides for tests use
+  `sync/atomic` stores so `t.Cleanup` and reconnect goroutines do not race under `-race`.
+- **CI reproducibility**: pin **`ubuntu-24.04`** and Go **`1.25.9`** (matches `go.mod` toolchain)
+  in GitHub Actions workflows.
+
+### Fixed
+
+- **`phaudittrailv0`**: RabbitMQ channel open failure returns an error instead of
+  `log.Panicln`.
+- **`phtrace`**: document that `MustPhaseHistogram` is for startup-only registration;
+  prefer `NewPhaseHistogram` when setup should be recoverable.
+
+### Security
+
+- **`rmq-autoconnect`**: log connection attempts with **redacted** credentials
+  (`amqp://***:***@host:port/vhost`) instead of the full AMQP URI.
+
+### Removed
+
+- **`bitbucket-pipelines.yml`**: CI is **GitHub Actions only** (`.github/workflows/ci.yml`).
+
+---
+
 ## [v1.10.0](https://github.com/PayCloud-ID/paycloudhelper/compare/v1.9.0..v1.10.0) - 2026-04-24
 
 ### Changed (Breaking)

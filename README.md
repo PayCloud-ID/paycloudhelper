@@ -25,7 +25,7 @@ Go: 1.25 (toolchain pinned via `go.mod`)
 - [Testing](#testing)
 - [Verifying the library](#verifying-the-library)
 - [Consumer Migration (v2.0.0 / Redis v9)](#consumer-migration-v200--redis-v9)
-- [CI (Bitbucket Pipelines)](#ci-bitbucket-pipelines)
+- [CI (GitHub Actions)](#ci-github-actions)
 - [Versioning](#versioning)
 - [Automation Prompts](#automation-prompts)
 - [Contributing](#contributing)
@@ -412,6 +412,20 @@ pub.Stop() // graceful drain on shutdown
 - Falls back to V1 goroutine-per-call when publisher is nil.
 - Functional options: `WithWorkerCount`, `WithBufferSize`, `WithMaxRetries`, `WithPublishTimeout`, `WithMessageTTL`, `WithCircuitBreakerThreshold`, `WithCircuitBreakerCooldown`.
 
+**Optional — sonic for audit JSON** (startup; for high-volume audit publish paths only):
+
+```go
+import (
+    pch "github.com/PayCloud-ID/paycloudhelper"
+    "github.com/PayCloud-ID/paycloudhelper/phjson"
+)
+
+phjson.ConfigureForAuditTrail()              // sonic: EscapeHTML=false (matches default audit semantics)
+pch.ConfigureAuditJSONMarshal(phjson.Marshal) // used by V1 push + V2 publisher workers
+```
+
+The default remains `encoding/json` (Encoder with `SetEscapeHTML(false)`). Pass `nil` to `ConfigureAuditJSONMarshal` to restore the default.
+
 ### Middleware (Echo)
 
 ```go
@@ -598,22 +612,15 @@ Use these skill packs from this repository as migration playbooks:
 
 ---
 
-## CI (Bitbucket Pipelines)
+## CI (GitHub Actions)
 
-Every push to **develop** and **main** runs a pipeline that:
+Workflows live under `.github/workflows/`. The primary gate (**validate**) runs on pushes and pull requests to `master`, `main`, `develop`, and `staging`. It runs `buf lint`, repository checks (`make ci.check.direct-http`, `make ci.check.stub-drift`), `go build ./...`, `go vet ./...`, `go test ./...`, **`go test -race ./...`**, coverage checks where configured, **golangci-lint**, and **govulncheck**.
 
-- Builds the module (`go build ./...`)
-- Runs the linter (`go vet ./...`)
-- Runs all unit tests (`go test ./...`)
+The runner image and Go toolchain are **pinned** (`ubuntu-24.04`, Go **1.25.9** matching `go.mod`) for reproducible CI.
 
-If any step fails, the pipeline fails. Fix the code and push again.
+If any step fails, the workflow fails—fix and push again.
 
-**Note:** Pipelines run *after* the push. The push itself is not blocked. To keep **main** (or **develop**) from accepting broken code:
-
-1. In Bitbucket: **Repository settings → Branch restrictions**.
-2. Add a restriction for `main` (and optionally `develop`): **Require passing pipelines** (and/or require pull requests). Then merges to that branch only succeed when the pipeline is green.
-
-Pipeline config: GitHub Actions workflows in `.github/workflows/`.
+**Branch protection:** In GitHub: **Settings → Rules → Rulesets** (or classic branch protection) for `main` / `develop`—require the CI check to pass before merge so broken changes do not land on protected branches.
 
 ---
 

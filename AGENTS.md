@@ -302,7 +302,7 @@ Does the change touch an EXISTING exported function signature?
 
 ## Consumer Migration Assets
 
-- Use `prompt-migrate-bitbucket-pipelines-to-github-actions.md` from repo root to generate a GitHub Actions workflow from the current Bitbucket pipeline.
+- **This repository** uses **GitHub Actions** only (`.github/workflows/`). The prompt `prompt-migrate-bitbucket-pipelines-to-github-actions.md` remains for **consumer services** still on Bitbucket that need an equivalent workflow.
 - For consumer service migration planning, start with the core skill and then select the service-profile skill (`echo-api`, `worker`, or `scheduler`).
 - Keep migration rollouts staged: build/vet/test/race in service repo before promoting to production.
 

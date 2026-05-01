@@ -199,7 +199,7 @@ func TestSetUpRabbitMq_error_doesNotSetGlobals(t *testing.T) {
 	}
 }
 
-func TestStartRQConnection_channelError_returnsWhenTestFlagSet(t *testing.T) {
+func TestStartRQConnection_channelError_returnsError(t *testing.T) {
 	r := &RMqAutoConnect{uriConnection: "amqp://x"}
 	prevDial := auditV0DialHook
 	prevAfter := auditV0AfterHook
@@ -207,7 +207,6 @@ func TestStartRQConnection_channelError_returnsWhenTestFlagSet(t *testing.T) {
 	prevCloseCh := auditV0ChannelCloseHook
 	prevCloseConn := auditV0ConnCloseHook
 	prevMax := auditV0MaxTrialsForTest
-	prevFlag := auditV0ReturnChannelErrorForTest
 	t.Cleanup(func() {
 		auditV0DialHook = prevDial
 		auditV0AfterHook = prevAfter
@@ -215,7 +214,6 @@ func TestStartRQConnection_channelError_returnsWhenTestFlagSet(t *testing.T) {
 		auditV0ChannelCloseHook = prevCloseCh
 		auditV0ConnCloseHook = prevCloseConn
 		auditV0MaxTrialsForTest = prevMax
-		auditV0ReturnChannelErrorForTest = prevFlag
 	})
 
 	auditV0DialHook = func(string, amqp.Config) (*amqp.Connection, error) { return &amqp.Connection{}, nil }
@@ -223,7 +221,6 @@ func TestStartRQConnection_channelError_returnsWhenTestFlagSet(t *testing.T) {
 	auditV0ChannelHook = func(*amqp.Connection) (*amqp.Channel, error) { return nil, errors.New("channel failed") }
 	auditV0ChannelCloseHook = func(*amqp.Channel) error { return nil }
 	auditV0ConnCloseHook = func(*amqp.Connection) error { return nil }
-	auditV0ReturnChannelErrorForTest = true
 	auditV0MaxTrialsForTest = 1
 
 	_, _, err := r.startRQConnection()

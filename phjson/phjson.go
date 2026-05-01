@@ -9,6 +9,13 @@ var (
 	ConfigDefault sonic.API
 )
 
+// ConfigureForAuditTrail freezes sonic with EscapeHTML disabled so string fields are not
+// HTML-escaped after serialization, aligning with paycloudhelper's default audit JSON
+// (encoding/json Encoder with SetEscapeHTML(false)). Call before pchelper.ConfigureAuditJSONMarshal(phjson.Marshal).
+func ConfigureForAuditTrail() {
+	NewConfig(&sonic.Config{EscapeHTML: false})
+}
+
 // NewConfig initializes the default configuration for sonic APIs.
 func NewConfig(config *sonic.Config) {
 	if config == nil {
