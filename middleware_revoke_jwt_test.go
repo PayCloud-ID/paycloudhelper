@@ -137,6 +137,125 @@ func TestRevokeToken_expiredClaim_unauthorized(t *testing.T) {
 	}
 }
 
+func TestRevokeToken_nonRSASigningMethod_unauthorized(t *testing.T) {
+	_ = setupMiniredis(t)
+	pubPEM, _ := testRSAPEMPair(t)
+	t.Setenv("APP_PUBLIC_KEY", pubPEM)
+
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"Expired":    time.Now().Add(time.Hour).UTC().Format("2006-01-02 15:04:05"),
+		"MerchantId": float64(1),
+	})
+	s, err := tok.SignedString([]byte("not-used-secret"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	e := echo.New()
+	h := RevokeToken(func(c echo.Context) error {
+		t.Fatal("next should not run")
+		return nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer "+s)
+	rec := httptest.NewRecorder()
+	ctx := e.NewContext(req, rec)
+
+	if err := h(ctx); err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("code=%d want 401", rec.Code)
+	}
+}
+
+func TestRevokeToken_missingExpiredClaim_unauthorized(t *testing.T) {
+	_ = setupMiniredis(t)
+	pubPEM, priv := testRSAPEMPair(t)
+	t.Setenv("APP_PUBLIC_KEY", pubPEM)
+
+	token := signedRevokeJWT(t, priv, jwt.MapClaims{
+		"MerchantId": float64(99),
+	})
+
+	e := echo.New()
+	h := RevokeToken(func(c echo.Context) error {
+		t.Fatal("next should not run")
+		return nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	ctx := e.NewContext(req, rec)
+
+	if err := h(ctx); err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("code=%d want 401", rec.Code)
+	}
+}
+
+func TestRevokeToken_expiredClaimWrongType_unauthorized(t *testing.T) {
+	_ = setupMiniredis(t)
+	pubPEM, priv := testRSAPEMPair(t)
+	t.Setenv("APP_PUBLIC_KEY", pubPEM)
+
+	token := signedRevokeJWT(t, priv, jwt.MapClaims{
+		"Expired":    float64(1234567890),
+		"MerchantId": float64(1),
+	})
+
+	e := echo.New()
+	h := RevokeToken(func(c echo.Context) error {
+		t.Fatal("next should not run")
+		return nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	ctx := e.NewContext(req, rec)
+
+	if err := h(ctx); err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("code=%d want 401", rec.Code)
+	}
+}
+
+func TestRevokeToken_expiredClaimInvalidFormat_unauthorized(t *testing.T) {
+	_ = setupMiniredis(t)
+	pubPEM, priv := testRSAPEMPair(t)
+	t.Setenv("APP_PUBLIC_KEY", pubPEM)
+
+	token := signedRevokeJWT(t, priv, jwt.MapClaims{
+		"Expired":    "Tuesday",
+		"MerchantId": float64(1),
+	})
+
+	e := echo.New()
+	h := RevokeToken(func(c echo.Context) error {
+		t.Fatal("next should not run")
+		return nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	ctx := e.NewContext(req, rec)
+
+	if err := h(ctx); err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("code=%d want 401", rec.Code)
+	}
+}
+
 func TestRevokeToken_invalidMerchantClaim_unauthorized(t *testing.T) {
 	_ = setupMiniredis(t)
 	pubPEM, priv := testRSAPEMPair(t)

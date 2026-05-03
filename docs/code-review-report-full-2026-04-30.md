@@ -9,10 +9,10 @@
 
 ## Executive Summary
 
-**Overall health score**: **74 / 100** *(updated after concurrency/race/CI, credential logging, CI pinning, and sdk/shared tests — 2026-05-02)*  
-**Deployment readiness**: **Conditionally Ready** *(remaining blockers: TLS defaults **SEC-1**, JWT middleware panics **SEC-2/SEC-3**)*  
+**Overall health score**: **76 / 100** *(updated after JWT `RevokeToken` hardening — 2026-05-03)*  
+**Deployment readiness**: **Conditionally Ready** *(remaining blocker: TLS defaults **SEC-1**)*  
 
-**Rationale (1 paragraph)**: This repository is a **shared Go library** (not a standalone microservice), but it ships production-critical middleware and infrastructure clients (Redis, RabbitMQ, JWT auth middleware, Sentry, OTel). **Resolved (2026-05-01 / 2026-05-02):** `go test -race ./...` **passes**, CI runs **`-race`** on **pinned** `ubuntu-24.04` + Go **1.25.9**, reconnect loops use **timer reuse** where applicable, legacy RabbitMQ paths return **errors** instead of panics, **`rmq-autoconnect` logs redacted AMQP URIs** (no credentials in log text), **`sdk/shared/*` placeholder packages have tests**, and **Bitbucket Pipelines config removed** (GitHub Actions only). **Still open before full release:** **SEC-1** (`InsecureSkipVerify`), **SEC-2/SEC-3** (JWT handling).
+**Rationale (1 paragraph)**: This repository is a **shared Go library** (not a standalone microservice), but it ships production-critical middleware and infrastructure clients (Redis, RabbitMQ, JWT auth middleware, Sentry, OTel). **Resolved (2026-05-01 / 2026-05-02 / 2026-05-03):** `go test -race ./...` **passes**, CI runs `**-race`** on **pinned** `ubuntu-24.04` + Go **1.25.9**, reconnect loops use **timer reuse** where applicable, legacy RabbitMQ paths return **errors** instead of panics, `**rmq-autoconnect` logs redacted AMQP URIs**, `**sdk/shared/*` placeholder packages have tests**, **Bitbucket Pipelines removed**, and `**RevokeToken` no longer panics on bad JWT alg / `Expired` claims** (**SEC-2**, **SEC-3**) with regression tests. **Still open before full release:** **SEC-1** (`InsecureSkipVerify`).
 
 ### Finding counts by severity
 
@@ -29,7 +29,7 @@
 ### Go / toolchain
 
 - **Go toolchain (local evidence)**: `go1.25.9 darwin/arm64` (tool output)  
-- **`go.mod`**: `go 1.25.0` + `toolchain go1.25.9`
+- `**go.mod`**: `go 1.25.0` + `toolchain go1.25.9`
 
 ### Module and build targets
 
@@ -51,7 +51,7 @@
   - `phjson`: **100%** (tool output)
   - `phsentry`: **65.2%** (tool output)
 - `go test -race ./...`: **PASS** *(as of 2026-05-01 after fixes for `CONC-1`, `CONC-2`)*.
-- ~~Packages with **no test files**~~: **`sdk/shared/*`** now include placeholder `_test.go` files *(2026-05-02)*.
+- ~~Packages with **no test files~~**: `**sdk/shared/*`** now include placeholder `_test.go` files *(2026-05-02)*.
 
 ### Runtime dependencies and external touchpoints (from `go.mod`)
 
@@ -60,14 +60,14 @@
 - **RabbitMQ**: `github.com/rabbitmq/amqp091-go` (`go.mod:15`)
 - **JWT**: `github.com/golang-jwt/jwt/v5` (`go.mod:56`)
 - **Sentry**: `github.com/getsentry/sentry-go` (`go.mod:10`)
-- **OpenTelemetry**: multiple `go.opentelemetry.io/otel/*` modules (`go.mod:16–23`)
+- **OpenTelemetry**: multiple `go.opentelemetry.io/otel/`* modules (`go.mod:16–23`)
 - **Env loading**: `github.com/joho/godotenv` (`go.mod:12`), executed during package `init()` (`init.go:12–16`, `init.go:52–76`)
 
 ### Security-sensitive config/artifacts discovered
 
-- **GitHub Actions**: `.github/workflows/ci.yml` — canonical CI; **`runs-on: ubuntu-24.04`**, **`go-version: '1.25.9'`**, build/vet/test/**`-race`/lint/vulncheck** *(pinned — 2026-05-02)*  
+- **GitHub Actions**: `.github/workflows/ci.yml` — canonical CI; `**runs-on: ubuntu-24.04`**, `**go-version: '1.25.9'*`*, build/vet/test/`**-race`/lint/vulncheck** *(pinned — 2026-05-02)*  
 - **No Dockerfile / k8s manifests** found in repo (glob results)  
-- ~~**Legacy CI**~~: **`bitbucket-pipelines.yml` removed** — GitHub Actions only *(2026-05-02)*
+- ~~**Legacy CI**~~: `**bitbucket-pipelines.yml` removed** — GitHub Actions only *(2026-05-02)*
 
 ---
 
@@ -128,6 +128,8 @@
   - `go test -race ./...` (after concurrency fixes)  
   - Add a test: token with `SigningMethodHS256` must not panic and must return Unauthorized.
 
+**Resolution (2026-05-03):** **Resolved.** Non-RSA algorithms log `alg` and concrete type only (`token.Method.Alg()`, `%T`); no type assertion in the `!ok` branch. `**TestRevokeToken_nonRSASigningMethod_unauthorized`** (HS256 → **401**, no panic).
+
 #### SEC-3
 
 - **Severity**: High  
@@ -144,6 +146,8 @@
   - Add tests for: missing `Expired`, invalid format, and wrong type.
 - **Validation**:
   - New unit tests in `middleware_revoke_jwt_test.go` (or similar) asserting `401` and no panic for malformed claims.
+
+**Resolution (2026-05-03):** **Resolved.** `Expired` is read with map lookup + `string` assertion; empty strings rejected; `time.Parse` errors yield **401**. Tests: `**TestRevokeToken_missingExpiredClaim_unauthorized`**, `**TestRevokeToken_expiredClaimWrongType_unauthorized**`, `**TestRevokeToken_expiredClaimInvalidFormat_unauthorized**`.
 
 #### SEC-4
 
@@ -397,22 +401,21 @@
 ## Detailed File Reference Matrix
 
 
-| File                                 | Line(s)               | Finding ID(s) |
-| ------------------------------------ | --------------------- | ------------- |
-| `amqp.go`                            | 163–170               | SEC-1         |
-| `amqp.go`                            | 120–133, 182          | CONC-1        |
-| `amqp_audit_test.go`                 | 602–615               | CONC-1        |
-| `phaudittrailv0/audittrail-mq-v0.go` | 91–98                 | SEC-1         |
-| `rmq-autoconnect.go`                 | 199–207               | SEC-4 *(resolved)* |
-| `rmq-autoconnect.go`                 | 59–61, 81–82, 188–205 | CONC-2        |
-| `rmq-autoconnect.go`                 | 163–171               | RES-1         |
-| `rmq_autoconnect_test.go`            | 141–183               | CONC-2        |
-| `revoke-token.go`                    | 62–66                 | SEC-2         |
-| `revoke-token.go`                    | 90–95                 | SEC-3         |
-| `phtrace/metrics.go`                 | 70–76                 | RES-1         |
-| `.github/workflows/ci.yml`           | 41–48                 | TEST-1        |
-| `init.go`                            | 12–16, 18–61          | ARCH-1, RES-2 |
-| `config.go`                          | 26–44, 71–77          | ENV-1, ENV-2  |
+| File                                 | Line(s)               | Finding ID(s)             |
+| ------------------------------------ | --------------------- | ------------------------- |
+| `amqp.go`                            | 163–170               | SEC-1                     |
+| `amqp.go`                            | 120–133, 182          | CONC-1                    |
+| `amqp_audit_test.go`                 | 602–615               | CONC-1                    |
+| `phaudittrailv0/audittrail-mq-v0.go` | 91–98                 | SEC-1                     |
+| `rmq-autoconnect.go`                 | 199–207               | SEC-4 *(resolved)*        |
+| `rmq-autoconnect.go`                 | 59–61, 81–82, 188–205 | CONC-2                    |
+| `rmq-autoconnect.go`                 | 163–171               | RES-1                     |
+| `rmq_autoconnect_test.go`            | 141–183               | CONC-2                    |
+| `revoke-token.go`                    | 62–68, ~96–116        | SEC-2, SEC-3 *(resolved)* |
+| `phtrace/metrics.go`                 | 70–76                 | RES-1                     |
+| `.github/workflows/ci.yml`           | 41–48                 | TEST-1                    |
+| `init.go`                            | 12–16, 18–61          | ARCH-1, RES-2             |
+| `config.go`                          | 26–44, 71–77          | ENV-1, ENV-2              |
 
 
 ---
@@ -422,7 +425,7 @@
 ### Immediate (blockers / pre-release)
 
 - **SEC-1**: Remove `InsecureSkipVerify: true` defaults in `amqp.go` and `phaudittrailv0/audittrail-mq-v0.go`; add explicit opt-in if needed.
-- **SEC-2 / SEC-3**: Fix panic-able JWT parsing/logging in `revoke-token.go` and add regression tests.
+- ~~**SEC-2 / SEC-3**~~: **Done (2026-05-03)** — safe `RevokeToken` logging and `Expired` handling; `middleware_revoke_jwt_test.go` regressions.
 - ~~**CONC-1 / CONC-2**~~: **Done (2026-05-01)** — atomics for AMQP test delays; `rmq-autoconnect` mutex + `WaitGroup`; `go test -race ./...` passes.
 - ~~**TEST-1**~~: **Done (2026-05-01)** — `go test -race ./...` in GitHub Actions.
 
@@ -434,7 +437,7 @@
 
 ### Medium Term (next quarter)
 
-- ~~**TEST-2**~~: **Done (2026-05-02)** — placeholder tests for `sdk/shared/*` (packages still doc-only; expand when APIs land).
+- ~~**TEST-2**~~: **Done (2026-05-02)** — placeholder tests for `sdk/shared/`* (packages still doc-only; expand when APIs land).
 - ~~**SUP-1**~~ / ~~**SUP-2**~~: **Done (2026-05-02)** — pinned `ubuntu-24.04` + Go `1.25.9`; removed Bitbucket pipeline; README documents GitHub Actions.
 - Strengthen “production profile” config validation rules for service identity (**ENV-1**) (Needs Verification: rollout).
 
@@ -449,7 +452,7 @@
 - **Title**: Strong unit test presence and meaningful coverage signal across many packages
 - **Evidence**: `go test -cover ./...` reports e.g. root package `86.6%` coverage (tool output)
 - **Impact**: Reduces regression risk and increases confidence in refactors.
-- **Remediation**: Keep coverage gate; **`sdk/shared/*`** now have minimal tests *(2026-05-02)* — extend when exported helpers ship.
+- **Remediation**: Keep coverage gate; `**sdk/shared/`*** now have minimal tests *(2026-05-02)* — extend when exported helpers ship.
 - **Validation**: Continue running `go test -cover ./...` in CI.
 
 #### GOOD-2
@@ -490,9 +493,9 @@
 
 - This is a **Go library** module (`go.mod:1`) with import-time initialization (`init.go:12–16`).
 - `go test -race ./...` **passes** as of 2026-05-01 (after fixes for `CONC-1` / `CONC-2`).
-- **`rmq-autoconnect` logs redacted AMQP URIs** (no username/password in log text) as of 2026-05-02 (**SEC-4**).
+- `**rmq-autoconnect` logs redacted AMQP URIs** (no username/password in log text) as of 2026-05-02 (**SEC-4**).
 - TLS verification is disabled in RabbitMQ configs (`amqp.go:163–170`, `phaudittrailv0/audittrail-mq-v0.go:91–98`).
-- JWT revocation middleware contains panic-able code paths (`revoke-token.go:62–66`, `revoke-token.go:90`).
+- `**RevokeToken`**: unsafe JWT logging / `Expired` panics **addressed** as of 2026-05-03 (**SEC-2**, **SEC-3**).
 
 ### Assumptions (explicit)
 
@@ -513,4 +516,3 @@
 - Evidence → Impact → Remediation → Validation included for each finding: **Yes**.  
 - Duplicates removed: **Yes** (e.g., `-race` failure described once with two concrete race vectors).  
 - Facts vs assumptions vs unknowns separated: **Yes**.
-

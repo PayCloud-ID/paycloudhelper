@@ -43,6 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`rmq-autoconnect`**: log connection attempts with **redacted** credentials
   (`amqp://***:***@host:port/vhost`) instead of the full AMQP URI.
+- **`RevokeToken`**: remove panic vectors in JWT handling — log non-RSA algorithms with
+  `alg` + `%T` instead of an invalid type assertion; validate `Expired` claim presence,
+  type, and `time.Parse` errors before enforcing expiry (tests for HS256 token, missing /
+  mistyped / malformed `Expired`).
 
 ### Removed
 
