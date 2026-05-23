@@ -7,9 +7,8 @@ import (
 )
 
 var (
-	// Other vars...
 	mutexMap     = make(map[string]*redsync.Mutex)
-	mutexMapLock = &sync.Mutex{}
+	mutexMapLock sync.Mutex
 )
 
 // StoreMutex stores a mutex in the map for later release

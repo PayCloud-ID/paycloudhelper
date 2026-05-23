@@ -43,7 +43,8 @@ import paycloudhelper → init() runs:
   AddValidatorLibs() → InitializeLogger() → InitializeApp()
 
 Consumer must explicitly call:
-  InitializeRedisWithRetry(opts)   → Redis pool + RedSync
+  InitRedisFromEnv()               → Redis pool + RedSync (reads REDIS_* env vars; no-op if REDIS_HOST unset)
+  InitializeRedisWithRetry(opts)   → Redis pool + RedSync (advanced: full option control)
   SetUpRabbitMq(...)               → Audit trail
   InitSentry(options)              → Error tracking (optional)
   ConfigureLogForwarding(cfg)      → Log → Sentry forwarding (optional)
@@ -95,8 +96,10 @@ flowchart LR
 ```go
 import pch "github.com/PayCloud-ID/paycloudhelper"
 
-// In main() — after godotenv.Load()
-pch.InitializeRedisWithRetry(pch.RedisInitOptions{...})
+// In main() — paycloudhelper init() has already loaded .env
+if err := pch.InitRedisFromEnv(); err != nil { // reads REDIS_HOST/PORT/PASSWORD/DB; no-op if REDIS_HOST unset
+    log.Fatal(err)
+}
 pch.SetUpRabbitMq(...)
 pch.InitSentry(pch.SentryOptions{Dsn: os.Getenv("SENTRY_DSN")})
 
@@ -105,6 +108,8 @@ pch.ConfigureLogForwarding(pch.LogForwardConfig{
     ForwardFatal: true, // default true when Sentry is enabled
 })
 ```
+
+For the full Redis integration walkthrough, env vars, locking, and per-service migration steps see **[docs/redis-integration.md](docs/redis-integration.md)**.
 
 ---
 
@@ -313,13 +318,35 @@ return c.JSON(resp.Code, resp)
 
 ### Redis
 
+**Initialization** — call once in `main()`:
+
 ```go
-pch.StoreRedis(key, value, duration)
-pch.GetRedis(key)
+// Recommended: reads REDIS_HOST / REDIS_PORT / REDIS_PASSWORD / REDIS_DB from env.
+// Returns nil (no-op) when REDIS_HOST is unset — Redis is optional.
+if err := pch.InitRedisFromEnv(); err != nil {
+    log.Fatal(err)
+}
+
+// Advanced: full option control (pool size, FailFast, custom retry)
+pch.InitializeRedisWithRetry(pch.RedisInitOptions{...})
+
+// Guard optional Redis-dependent features
+if pch.RedisEnabled() { ... }
+```
+
+**Operations:**
+
+```go
+pch.StoreRedisWithContext(ctx, key, value, duration)
+pch.GetRedisWithContext(ctx, key)
+pch.DeleteRedisWithContext(ctx, key)
 pch.StoreRedisWithLock(key, value, duration)
 pch.AcquireLockWithRetry(key, ttl, retries, delay)
 pch.ReleaseLockWithRetry(mutex, retries)
+client, err := pch.GetRedisPoolClient() // raw *redis.Client for pipelines, Lua, SCAN
 ```
+
+Full guide: **[docs/redis-integration.md](docs/redis-integration.md)**
 
 ### Sentry Error Tracking
 
@@ -441,8 +468,9 @@ e.Use(pch.RevokeToken)     // JWT + Redis revocation check
 ### Redis
 
 - **Purpose:** caching, idempotency, token revoke checks, distributed locks.
-- **Connection:** provided by consumer service config and initialized through `InitializeRedisWithRetry`.
-- **Key operations:** `StoreRedis`, `GetRedis`, `DeleteRedis`, `AcquireLockWithRetry`, `ReleaseLockWithRetry`.
+- **Connection:** call `InitRedisFromEnv()` in `main()` — reads `REDIS_HOST/PORT/PASSWORD/DB`, skips gracefully when `REDIS_HOST` is unset. Use `InitializeRedisWithRetry` for full option control.
+- **Key operations:** `StoreRedisWithContext`, `GetRedisWithContext`, `DeleteRedisWithContext`, `AcquireLockWithRetry`, `ReleaseLockWithRetry`, `GetRedisPoolClient`.
+- **Full guide:** [docs/redis-integration.md](docs/redis-integration.md)
 
 ### RabbitMQ
 

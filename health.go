@@ -63,7 +63,8 @@ func CheckHealth() *HealthCheck {
 func checkRedisHealth() HealthStatus {
 	status := HealthStatus{Component: "redis"}
 
-	if redisPoolClient == nil {
+	c := redisPoolClient.Load()
+	if c == nil {
 		status.Status = "unhealthy"
 		status.Message = "redis client not initialized"
 		return status
@@ -73,7 +74,7 @@ func checkRedisHealth() HealthStatus {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	_, err := redisPoolClient.Ping(ctx).Result()
+	_, err := c.Ping(ctx).Result()
 	latency := time.Since(start).Milliseconds()
 
 	if err != nil {
@@ -141,11 +142,12 @@ func checkSentryHealth() HealthStatus {
 // GetRedisPoolStats returns Redis connection pool statistics
 // Safe to call - returns nil if Redis not initialized
 func GetRedisPoolStats() *RedisPoolStats {
-	if redisPoolClient == nil {
+	c := redisPoolClient.Load()
+	if c == nil {
 		return nil
 	}
 
-	stats := redisPoolClient.PoolStats()
+	stats := c.PoolStats()
 
 	return &RedisPoolStats{
 		TotalConns: int(stats.TotalConns),
