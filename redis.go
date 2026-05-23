@@ -321,8 +321,47 @@ func initRedisClient(opt *redis.Options) error {
 	return nil
 }
 
+// Redis TTL guardrail (added 2026-05-23).
+//
+// MaxTTL returns the upper-bound clamp for Redis writes via StoreRedis and
+// StoreRedisWithContext. Reads env REDIS_MAX_TTL_MINUTES; default 43200 (30d).
+// A value <= 0 in the env falls back to the default.
+//
+// Soft-clamp behavior (not reject): any caller-provided TTL above MaxTTL is
+// silently capped at MaxTTL and a warning is logged. This catches future
+// overflow-style bugs (like the 127-year clientpg:user-permissions TTL fixed
+// in Task 1.1) at write time without breaking the call.
+//
+// Negative TTLs collapse to 0 (= no expiry) with a warning. Callers that
+// genuinely need no-expiry should use StoreRedisNoExpiry explicitly.
+func MaxTTL() time.Duration {
+	const defaultMinutes = 30 * 24 * 60
+	minutes := defaultMinutes
+	if s := os.Getenv("REDIS_MAX_TTL_MINUTES"); s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n > 0 {
+			minutes = n
+		}
+	}
+	return time.Duration(minutes) * time.Minute
+}
+
+// clampStoreTTL applies the soft-clamp policy used by StoreRedis and
+// StoreRedisWithContext. Returns the TTL the caller should pass to Redis.
+func clampStoreTTL(key string, ttl time.Duration) time.Duration {
+	if ttl < 0 {
+		LogW("[StoreRedis] negative TTL %v for key=%q, clamping to 0 (no-expiry)", ttl, key)
+		return 0
+	}
+	if max := MaxTTL(); ttl > max {
+		LogW("[StoreRedis] TTL %v exceeds max %v for key=%q, clamping (possible overflow bug)", ttl, max, key)
+		return max
+	}
+	return ttl
+}
+
 // StoreRedisWithContext stores data to Redis with a custom context
-// Allows caller to control cancellation and timeout behavior
+// Allows caller to control cancellation and timeout behavior.
+// Applies the soft-clamp (see MaxTTL) so out-of-range TTLs are bounded.
 func StoreRedisWithContext(ctx context.Context, id string, data interface{}, duration time.Duration) error {
 	rClient, errCl := GetRedisPoolClient()
 	if errCl != nil {
@@ -338,12 +377,31 @@ func StoreRedisWithContext(ctx context.Context, id string, data interface{}, dur
 	timeoutCtx, cancel := context.WithTimeout(ctx, DefaultRedisTimeout)
 	defer cancel()
 
-	return rClient.Set(timeoutCtx, id, jsonData, duration).Err()
+	return rClient.Set(timeoutCtx, id, jsonData, clampStoreTTL(id, duration)).Err()
 }
 
 // StoreRedis stores data to Redis (backward compatible wrapper)
 func StoreRedis(id string, data interface{}, duration time.Duration) error {
 	return StoreRedisWithContext(context.Background(), id, data, duration)
+}
+
+// StoreRedisNoExpiry stores data to Redis with no expiry (TTL=0).
+// Use only for keys that genuinely must never expire. Bypasses MaxTTL.
+func StoreRedisNoExpiry(id string, data interface{}) error {
+	rClient, errCl := GetRedisPoolClient()
+	if errCl != nil {
+		return errCl
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
+	defer cancel()
+
+	return rClient.Set(ctx, id, jsonData, 0).Err()
 }
 
 func StoreRedisWithLock(id string, data interface{}, duration time.Duration) (err error) {
