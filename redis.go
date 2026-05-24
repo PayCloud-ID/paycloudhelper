@@ -652,22 +652,40 @@ func ReleaseLockWithRetry(mutex *redsync.Mutex, maxRetries int) error {
 	return fmt.Errorf("failed to release lock after %d attempts: %w", maxRetries, err)
 }
 
+// cachedBackoff and cachedLockTimeout are loaded once from env on first use.
+// Reading os.Getenv on every lock acquire/release is a per-call syscall; caching
+// eliminates that cost without restricting when the .env file must be loaded.
+var (
+	backoffOnce        sync.Once
+	cachedBackoff      int
+	lockTimeoutOnce    sync.Once
+	cachedLockTimeout  time.Duration
+)
+
+// GetTrxRedisBackoff returns the retry backoff in milliseconds for distributed lock
+// operations. Value is read from TRANSACTION_REDIS_BACKOFF once and cached.
 func GetTrxRedisBackoff() int {
-	rInt := defaultRedisBackoff
-	val, err := strconv.Atoi(os.Getenv("TRANSACTION_REDIS_BACKOFF"))
-	if err == nil && val >= 10 {
-		rInt = val
-	}
-	return rInt
+	backoffOnce.Do(func() {
+		v := defaultRedisBackoff
+		if val, err := strconv.Atoi(os.Getenv("TRANSACTION_REDIS_BACKOFF")); err == nil && val >= 10 {
+			v = val
+		}
+		cachedBackoff = v
+	})
+	return cachedBackoff
 }
 
+// GetTrxRedisLockTimeout returns the distributed lock TTL.
+// Value is read from TRANSACTION_REDIS_LOCK_TIMEOUT once and cached.
 func GetTrxRedisLockTimeout() time.Duration {
-	rInt := 2000 // millisecond
-	val, err := strconv.Atoi(os.Getenv("TRANSACTION_REDIS_LOCK_TIMEOUT"))
-	if err == nil && val >= minTimeout {
-		rInt = val
-	}
-	return time.Duration(rInt) * time.Millisecond
+	lockTimeoutOnce.Do(func() {
+		ms := 2000
+		if val, err := strconv.Atoi(os.Getenv("TRANSACTION_REDIS_LOCK_TIMEOUT")); err == nil && val >= minTimeout {
+			ms = val
+		}
+		cachedLockTimeout = time.Duration(ms) * time.Millisecond
+	})
+	return cachedLockTimeout
 }
 
 // resetRedisClientStateForTesting tears down package-level Redis state so tests can
@@ -681,4 +699,9 @@ func resetRedisClientStateForTesting() {
 	redisSyncInitOnce = sync.Once{}
 	redisSyncInitErr = nil
 	redisOptions = nil
+	// Reset cached env values so tests that manipulate env vars see fresh reads.
+	backoffOnce = sync.Once{}
+	cachedBackoff = 0
+	lockTimeoutOnce = sync.Once{}
+	cachedLockTimeout = 0
 }
