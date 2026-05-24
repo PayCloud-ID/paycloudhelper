@@ -2,7 +2,6 @@ package paycloudhelper
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -15,6 +14,8 @@ import (
 	"github.com/go-redsync/redsync/v4"
 	"github.com/go-redsync/redsync/v4/redis/goredis/v9"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/PayCloud-ID/paycloudhelper/phjson"
 )
 
 const (
@@ -368,7 +369,7 @@ func StoreRedisWithContext(ctx context.Context, id string, data interface{}, dur
 		return errCl
 	}
 
-	jsonData, err := json.Marshal(data)
+	jsonData, err := phjson.Marshal(data)
 	if err != nil {
 		return err
 	}
@@ -393,7 +394,7 @@ func StoreRedisNoExpiry(id string, data interface{}) error {
 		return errCl
 	}
 
-	jsonData, err := json.Marshal(data)
+	jsonData, err := phjson.Marshal(data)
 	if err != nil {
 		return err
 	}
