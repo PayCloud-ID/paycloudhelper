@@ -2,18 +2,20 @@ package paycloudhelper
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-redsync/redsync/v4"
 	"github.com/go-redsync/redsync/v4/redis/goredis/v9"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/PayCloud-ID/paycloudhelper/phjson"
 )
 
 const (
@@ -26,7 +28,8 @@ const (
 
 var (
 	DefaultRedisTimeout                          = 1000 * time.Millisecond
-	redisPoolClient                              *redis.Client
+	redisPoolClient                              atomic.Pointer[redis.Client] // atomic load/store; serialized writes via redisReconnectMu
+	redisReconnectMu                             sync.Mutex                   // serializes lazy reconnects in GetRedisPoolClient
 	redisHostMem, redisPortMem, redisPasswordMem *string
 	redisDbMem                                   *int
 	redisOptions                                 *redis.Options
@@ -36,6 +39,7 @@ var (
 	redisDefaultDuration                         = 300 * time.Second
 	redisLockKey                                 = "redis_lock:" // Default Redis lock key prefix
 )
+
 
 // LockError represents a distributed lock operation error with context
 type LockError struct {
@@ -126,15 +130,20 @@ func GetRedisPoolClient() (*redis.Client, error) {
 	if redisOptions == nil {
 		return nil, errors.New("nil redis options")
 	}
-
-	// open new pool connection if previously memory address pool connection is nil
-	if redisPoolClient == nil {
-		if err := GetRedisClient(*redisHostMem, *redisPortMem, *redisPasswordMem, *redisDbMem); err != nil {
-			return nil, err
-		}
+	// Fast path: client already alive.
+	if c := redisPoolClient.Load(); c != nil {
+		return c, nil
 	}
-
-	return redisPoolClient, nil
+	// Slow path: serialize reconnects so only one goroutine rebuilds the client.
+	redisReconnectMu.Lock()
+	defer redisReconnectMu.Unlock()
+	if c := redisPoolClient.Load(); c != nil { // double-check after acquiring lock
+		return c, nil
+	}
+	if err := initRedisClient(redisOptions); err != nil {
+		return nil, err
+	}
+	return redisPoolClient.Load(), nil
 }
 
 func InitRedisOptions(rawOpt redis.Options) *redis.Options {
@@ -184,12 +193,10 @@ func InitRedisOptions(rawOpt redis.Options) *redis.Options {
 	return redisOptions
 }
 
-// InitRedSyncOnce initializes the redSync instance once
+// InitRedSyncOnce initializes the redSync instance once.
+// sync.Once handles the already-initialized fast path; the pre-check is omitted
+// because reading redisSync outside the Once boundary is a data race.
 func InitRedSyncOnce() error {
-	if redisSync != nil {
-		return nil
-	}
-
 	redisSyncInitOnce.Do(func() {
 		redisSyncInitErr = func() error {
 			client, err := GetRedisPoolClient()
@@ -214,6 +221,56 @@ func GetRedisOptions() *redis.Options {
 	return redisOptions
 }
 
+// InitRedisFromEnv initializes Redis from standard environment variables.
+// Returns nil immediately when REDIS_HOST is not set — Redis is optional.
+// When REDIS_HOST is set but the connection fails, an error is returned so
+// the caller (main.go) can decide whether to abort startup.
+//
+// Supported environment variables:
+//
+//	REDIS_HOST      Redis server hostname (required to enable Redis)
+//	REDIS_PORT      Redis server port          (default: 6379)
+//	REDIS_PASSWORD  Redis password             (default: empty)
+//	REDIS_DB        Redis database index       (default: 0)
+func InitRedisFromEnv() error {
+	host := os.Getenv("REDIS_HOST")
+	if host == "" {
+		LogI("%s REDIS_HOST not set, skipping Redis init", buildLogPrefix("InitRedisFromEnv"))
+		return nil
+	}
+
+	port := os.Getenv("REDIS_PORT")
+	if port == "" {
+		port = "6379"
+	}
+
+	db := 0
+	if s := os.Getenv("REDIS_DB"); s != "" {
+		if v, err := strconv.Atoi(s); err == nil {
+			db = v
+		} else {
+			LogW("%s invalid REDIS_DB=%q using db=0", buildLogPrefix("InitRedisFromEnv"), s)
+		}
+	}
+
+	return InitializeRedisWithRetry(RedisInitOptions{
+		Options: redis.Options{
+			Addr:     net.JoinHostPort(host, port),
+			Password: os.Getenv("REDIS_PASSWORD"),
+			DB:       db,
+		},
+		MaxRetries: defaultRedisRetryMax,
+		RetryDelay: 1 * time.Second,
+		FailFast:   true,
+	})
+}
+
+// RedisEnabled reports whether Redis has been successfully initialized.
+// Use this to guard optional Redis-dependent features at runtime.
+func RedisEnabled() bool {
+	return redisPoolClient.Load() != nil
+}
+
 func GetRedisClient(redisHost, redisPort, redisPassword string, redisDb int) error {
 	LogI("%s host=%s port=%s db=%v", buildLogPrefix("GetRedisClient"), redisHost, redisPort, redisDb)
 	if GetRedisOptions() == nil {
@@ -235,27 +292,29 @@ func initRedisClient(opt *redis.Options) error {
 	}
 	LogI("%s starting redis client initialization", buildLogPrefix("initRedisClient"))
 
-	redisPoolClient = redis.NewClient(GetRedisOptions())
+	c := redis.NewClient(opt)
 
-	// Create a context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
 	defer cancel()
 
-	res, err := redisPoolClient.Ping(ctx).Result()
+	res, err := c.Ping(ctx).Result()
 	if err != nil {
+		_ = c.Close()
+		redisPoolClient.Store(nil) // clear so RedisEnabled() accurately reflects connectivity
 		LoggerErrorHub(err)
 		LogE("%s open redis pool connection failed", buildLogPrefix("initRedisClient"))
 		return err
 	}
 
+	redisPoolClient.Store(c) // store only after successful Ping
+
 	if GetAppName() != "" {
-		redisPoolClient.Do(context.Background(), "CLIENT", "SETNAME", GetAppName())
-		LogI("%s client name=%v", buildLogPrefix("initRedisClient"), redisPoolClient.ClientGetName(ctx))
+		c.Do(context.Background(), "CLIENT", "SETNAME", GetAppName())
+		LogI("%s client name=%v", buildLogPrefix("initRedisClient"), c.ClientGetName(ctx))
 	}
 
 	LogI("%s open redis pool connection successful status=%s", buildLogPrefix("initRedisClient"), res)
 
-	// Initialize RedSync after Redis is initialized
 	if err := InitRedSyncOnce(); err != nil {
 		LogW("%s failed to initialize redsync err=%s", buildLogPrefix("initRedisClient"), err.Error())
 	}
@@ -263,15 +322,54 @@ func initRedisClient(opt *redis.Options) error {
 	return nil
 }
 
+// Redis TTL guardrail (added 2026-05-23).
+//
+// MaxTTL returns the upper-bound clamp for Redis writes via StoreRedis and
+// StoreRedisWithContext. Reads env REDIS_MAX_TTL_MINUTES; default 43200 (30d).
+// A value <= 0 in the env falls back to the default.
+//
+// Soft-clamp behavior (not reject): any caller-provided TTL above MaxTTL is
+// silently capped at MaxTTL and a warning is logged. This catches future
+// overflow-style bugs (like the 127-year clientpg:user-permissions TTL fixed
+// in Task 1.1) at write time without breaking the call.
+//
+// Negative TTLs collapse to 0 (= no expiry) with a warning. Callers that
+// genuinely need no-expiry should use StoreRedisNoExpiry explicitly.
+func MaxTTL() time.Duration {
+	const defaultMinutes = 30 * 24 * 60
+	minutes := defaultMinutes
+	if s := os.Getenv("REDIS_MAX_TTL_MINUTES"); s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n > 0 {
+			minutes = n
+		}
+	}
+	return time.Duration(minutes) * time.Minute
+}
+
+// clampStoreTTL applies the soft-clamp policy used by StoreRedis and
+// StoreRedisWithContext. Returns the TTL the caller should pass to Redis.
+func clampStoreTTL(key string, ttl time.Duration) time.Duration {
+	if ttl < 0 {
+		LogW("[StoreRedis] negative TTL %v for key=%q, clamping to 0 (no-expiry)", ttl, key)
+		return 0
+	}
+	if max := MaxTTL(); ttl > max {
+		LogW("[StoreRedis] TTL %v exceeds max %v for key=%q, clamping (possible overflow bug)", ttl, max, key)
+		return max
+	}
+	return ttl
+}
+
 // StoreRedisWithContext stores data to Redis with a custom context
-// Allows caller to control cancellation and timeout behavior
+// Allows caller to control cancellation and timeout behavior.
+// Applies the soft-clamp (see MaxTTL) so out-of-range TTLs are bounded.
 func StoreRedisWithContext(ctx context.Context, id string, data interface{}, duration time.Duration) error {
 	rClient, errCl := GetRedisPoolClient()
 	if errCl != nil {
 		return errCl
 	}
 
-	jsonData, err := json.Marshal(data)
+	jsonData, err := phjson.Marshal(data)
 	if err != nil {
 		return err
 	}
@@ -280,12 +378,31 @@ func StoreRedisWithContext(ctx context.Context, id string, data interface{}, dur
 	timeoutCtx, cancel := context.WithTimeout(ctx, DefaultRedisTimeout)
 	defer cancel()
 
-	return rClient.Set(timeoutCtx, id, string(jsonData), duration).Err()
+	return rClient.Set(timeoutCtx, id, jsonData, clampStoreTTL(id, duration)).Err()
 }
 
 // StoreRedis stores data to Redis (backward compatible wrapper)
 func StoreRedis(id string, data interface{}, duration time.Duration) error {
 	return StoreRedisWithContext(context.Background(), id, data, duration)
+}
+
+// StoreRedisNoExpiry stores data to Redis with no expiry (TTL=0).
+// Use only for keys that genuinely must never expire. Bypasses MaxTTL.
+func StoreRedisNoExpiry(id string, data interface{}) error {
+	rClient, errCl := GetRedisPoolClient()
+	if errCl != nil {
+		return errCl
+	}
+
+	jsonData, err := phjson.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
+	defer cancel()
+
+	return rClient.Set(ctx, id, jsonData, 0).Err()
 }
 
 func StoreRedisWithLock(id string, data interface{}, duration time.Duration) (err error) {
@@ -472,12 +589,8 @@ func ReleaseLock(key string) error {
 // - acquired: whether the lock was acquired
 // - err: any error that occurred
 func AcquireLockWithRetry(key string, ttl time.Duration, maxRetries int, retryDelay time.Duration) (*redsync.Mutex, bool, error) {
-	// Initialize redisSync if not already initialized
-	if redisSync == nil {
-		err := InitRedSyncOnce()
-		if err != nil || redisSync == nil {
-			return nil, false, fmt.Errorf("failed to initialize redsync")
-		}
+	if err := InitRedSyncOnce(); err != nil {
+		return nil, false, fmt.Errorf("failed to initialize redsync: %w", err)
 	}
 
 	// Create a mutex with options
@@ -509,66 +622,86 @@ func AcquireLockWithRetry(key string, ttl time.Duration, maxRetries int, retryDe
 	return mutex, true, nil
 }
 
-// ReleaseLockWithRetry releases a previously acquired lock with retry mechanism
+// ReleaseLockWithRetry releases a previously acquired lock with retry mechanism.
+// Each attempt gets its own fresh context so a timeout on one attempt does not
+// poison all subsequent attempts.
 func ReleaseLockWithRetry(mutex *redsync.Mutex, maxRetries int) error {
 	if mutex == nil {
 		return fmt.Errorf("mutex is nil")
 	}
 
+	backoff := GetTrxRedisBackoff()
 	var err error
-
-	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
-	defer cancel()
-
 	for i := 0; i < maxRetries; i++ {
-		// Try to release the lock
-		if ok, unlockErr := mutex.UnlockContext(ctx); unlockErr == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
+		ok, unlockErr := mutex.UnlockContext(ctx)
+		cancel()
+
+		if unlockErr == nil {
 			if !ok {
-				// Lock was not released but no error occurred
 				err = fmt.Errorf("failed to release lock: not owner")
-				time.Sleep(time.Duration(GetTrxRedisBackoff()*(i+1)) * time.Millisecond) // Exponential backoff
+				time.Sleep(time.Duration(backoff*(i+1)) * time.Millisecond)
 				continue
 			}
-			// Lock was successfully released
 			return nil
-		} else {
-			// Error occurred while releasing the lock
-			err = unlockErr
-			time.Sleep(time.Duration(GetTrxRedisBackoff()*(i+1)) * time.Millisecond) // Exponential backoff
 		}
+		err = unlockErr
+		time.Sleep(time.Duration(backoff*(i+1)) * time.Millisecond)
 	}
 
 	return fmt.Errorf("failed to release lock after %d attempts: %w", maxRetries, err)
 }
 
+// cachedBackoff and cachedLockTimeout are loaded once from env on first use.
+// Reading os.Getenv on every lock acquire/release is a per-call syscall; caching
+// eliminates that cost without restricting when the .env file must be loaded.
+var (
+	backoffOnce        sync.Once
+	cachedBackoff      int
+	lockTimeoutOnce    sync.Once
+	cachedLockTimeout  time.Duration
+)
+
+// GetTrxRedisBackoff returns the retry backoff in milliseconds for distributed lock
+// operations. Value is read from TRANSACTION_REDIS_BACKOFF once and cached.
 func GetTrxRedisBackoff() int {
-	rInt := defaultRedisBackoff
-	val, err := strconv.Atoi(os.Getenv("TRANSACTION_REDIS_BACKOFF"))
-	if err == nil && val >= 10 {
-		rInt = val
-	}
-	return rInt
+	backoffOnce.Do(func() {
+		v := defaultRedisBackoff
+		if val, err := strconv.Atoi(os.Getenv("TRANSACTION_REDIS_BACKOFF")); err == nil && val >= 10 {
+			v = val
+		}
+		cachedBackoff = v
+	})
+	return cachedBackoff
 }
 
+// GetTrxRedisLockTimeout returns the distributed lock TTL.
+// Value is read from TRANSACTION_REDIS_LOCK_TIMEOUT once and cached.
 func GetTrxRedisLockTimeout() time.Duration {
-	rInt := 2000 // millisecond
-	val, err := strconv.Atoi(os.Getenv("TRANSACTION_REDIS_LOCK_TIMEOUT"))
-	if err == nil && val >= minTimeout {
-		rInt = val
-	}
-	return time.Duration(rInt) * time.Millisecond
+	lockTimeoutOnce.Do(func() {
+		ms := 2000
+		if val, err := strconv.Atoi(os.Getenv("TRANSACTION_REDIS_LOCK_TIMEOUT")); err == nil && val >= minTimeout {
+			ms = val
+		}
+		cachedLockTimeout = time.Duration(ms) * time.Millisecond
+	})
+	return cachedLockTimeout
 }
 
 // resetRedisClientStateForTesting tears down package-level Redis state so tests can
 // attach a fresh client (e.g. miniredis). Only for paycloudhelper package tests.
 func resetRedisClientStateForTesting() {
-	if redisPoolClient != nil {
-		_ = redisPoolClient.Close()
-		redisPoolClient = nil
+	if c := redisPoolClient.Load(); c != nil {
+		_ = c.Close()
 	}
+	redisPoolClient.Store(nil)
 	redisSync = nil
 	redisSyncInitOnce = sync.Once{}
 	redisSyncInitErr = nil
 	redisOptions = nil
+	// Reset cached env values so tests that manipulate env vars see fresh reads.
+	backoffOnce = sync.Once{}
+	cachedBackoff = 0
+	lockTimeoutOnce = sync.Once{}
+	cachedLockTimeout = 0
 }

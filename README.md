@@ -25,7 +25,7 @@ Go: 1.25 (toolchain pinned via `go.mod`)
 - [Testing](#testing)
 - [Verifying the library](#verifying-the-library)
 - [Consumer Migration (v2.0.0 / Redis v9)](#consumer-migration-v200--redis-v9)
-- [CI (Bitbucket Pipelines)](#ci-bitbucket-pipelines)
+- [CI (GitHub Actions)](#ci-github-actions)
 - [Versioning](#versioning)
 - [Automation Prompts](#automation-prompts)
 - [Contributing](#contributing)
@@ -43,7 +43,8 @@ import paycloudhelper → init() runs:
   AddValidatorLibs() → InitializeLogger() → InitializeApp()
 
 Consumer must explicitly call:
-  InitializeRedisWithRetry(opts)   → Redis pool + RedSync
+  InitRedisFromEnv()               → Redis pool + RedSync (reads REDIS_* env vars; no-op if REDIS_HOST unset)
+  InitializeRedisWithRetry(opts)   → Redis pool + RedSync (advanced: full option control)
   SetUpRabbitMq(...)               → Audit trail
   InitSentry(options)              → Error tracking (optional)
   ConfigureLogForwarding(cfg)      → Log → Sentry forwarding (optional)
@@ -95,8 +96,10 @@ flowchart LR
 ```go
 import pch "github.com/PayCloud-ID/paycloudhelper"
 
-// In main() — after godotenv.Load()
-pch.InitializeRedisWithRetry(pch.RedisInitOptions{...})
+// In main() — paycloudhelper init() has already loaded .env
+if err := pch.InitRedisFromEnv(); err != nil { // reads REDIS_HOST/PORT/PASSWORD/DB; no-op if REDIS_HOST unset
+    log.Fatal(err)
+}
 pch.SetUpRabbitMq(...)
 pch.InitSentry(pch.SentryOptions{Dsn: os.Getenv("SENTRY_DSN")})
 
@@ -105,6 +108,8 @@ pch.ConfigureLogForwarding(pch.LogForwardConfig{
     ForwardFatal: true, // default true when Sentry is enabled
 })
 ```
+
+For the full Redis integration walkthrough, env vars, locking, and per-service migration steps see **[docs/redis-integration.md](docs/redis-integration.md)**.
 
 ---
 
@@ -313,13 +318,35 @@ return c.JSON(resp.Code, resp)
 
 ### Redis
 
+**Initialization** — call once in `main()`:
+
 ```go
-pch.StoreRedis(key, value, duration)
-pch.GetRedis(key)
+// Recommended: reads REDIS_HOST / REDIS_PORT / REDIS_PASSWORD / REDIS_DB from env.
+// Returns nil (no-op) when REDIS_HOST is unset — Redis is optional.
+if err := pch.InitRedisFromEnv(); err != nil {
+    log.Fatal(err)
+}
+
+// Advanced: full option control (pool size, FailFast, custom retry)
+pch.InitializeRedisWithRetry(pch.RedisInitOptions{...})
+
+// Guard optional Redis-dependent features
+if pch.RedisEnabled() { ... }
+```
+
+**Operations:**
+
+```go
+pch.StoreRedisWithContext(ctx, key, value, duration)
+pch.GetRedisWithContext(ctx, key)
+pch.DeleteRedisWithContext(ctx, key)
 pch.StoreRedisWithLock(key, value, duration)
 pch.AcquireLockWithRetry(key, ttl, retries, delay)
 pch.ReleaseLockWithRetry(mutex, retries)
+client, err := pch.GetRedisPoolClient() // raw *redis.Client for pipelines, Lua, SCAN
 ```
+
+Full guide: **[docs/redis-integration.md](docs/redis-integration.md)**
 
 ### Sentry Error Tracking
 
@@ -412,6 +439,20 @@ pub.Stop() // graceful drain on shutdown
 - Falls back to V1 goroutine-per-call when publisher is nil.
 - Functional options: `WithWorkerCount`, `WithBufferSize`, `WithMaxRetries`, `WithPublishTimeout`, `WithMessageTTL`, `WithCircuitBreakerThreshold`, `WithCircuitBreakerCooldown`.
 
+**Optional — sonic for audit JSON** (startup; for high-volume audit publish paths only):
+
+```go
+import (
+    pch "github.com/PayCloud-ID/paycloudhelper"
+    "github.com/PayCloud-ID/paycloudhelper/phjson"
+)
+
+phjson.ConfigureForAuditTrail()              // sonic: EscapeHTML=false (matches default audit semantics)
+pch.ConfigureAuditJSONMarshal(phjson.Marshal) // used by V1 push + V2 publisher workers
+```
+
+The default remains `encoding/json` (Encoder with `SetEscapeHTML(false)`). Pass `nil` to `ConfigureAuditJSONMarshal` to restore the default.
+
 ### Middleware (Echo)
 
 ```go
@@ -427,8 +468,9 @@ e.Use(pch.RevokeToken)     // JWT + Redis revocation check
 ### Redis
 
 - **Purpose:** caching, idempotency, token revoke checks, distributed locks.
-- **Connection:** provided by consumer service config and initialized through `InitializeRedisWithRetry`.
-- **Key operations:** `StoreRedis`, `GetRedis`, `DeleteRedis`, `AcquireLockWithRetry`, `ReleaseLockWithRetry`.
+- **Connection:** call `InitRedisFromEnv()` in `main()` — reads `REDIS_HOST/PORT/PASSWORD/DB`, skips gracefully when `REDIS_HOST` is unset. Use `InitializeRedisWithRetry` for full option control.
+- **Key operations:** `StoreRedisWithContext`, `GetRedisWithContext`, `DeleteRedisWithContext`, `AcquireLockWithRetry`, `ReleaseLockWithRetry`, `GetRedisPoolClient`.
+- **Full guide:** [docs/redis-integration.md](docs/redis-integration.md)
 
 ### RabbitMQ
 
@@ -598,22 +640,15 @@ Use these skill packs from this repository as migration playbooks:
 
 ---
 
-## CI (Bitbucket Pipelines)
+## CI (GitHub Actions)
 
-Every push to **develop** and **main** runs a pipeline that:
+Workflows live under `.github/workflows/`. The primary gate (**validate**) runs on pushes and pull requests to `master`, `main`, `develop`, and `staging`. It runs `buf lint`, repository checks (`make ci.check.direct-http`, `make ci.check.stub-drift`), `go build ./...`, `go vet ./...`, `go test ./...`, **`go test -race ./...`**, coverage checks where configured, **golangci-lint**, and **govulncheck**.
 
-- Builds the module (`go build ./...`)
-- Runs the linter (`go vet ./...`)
-- Runs all unit tests (`go test ./...`)
+The runner image and Go toolchain are **pinned** (`ubuntu-24.04`, Go **1.25.9** matching `go.mod`) for reproducible CI.
 
-If any step fails, the pipeline fails. Fix the code and push again.
+If any step fails, the workflow fails—fix and push again.
 
-**Note:** Pipelines run *after* the push. The push itself is not blocked. To keep **main** (or **develop**) from accepting broken code:
-
-1. In Bitbucket: **Repository settings → Branch restrictions**.
-2. Add a restriction for `main` (and optionally `develop`): **Require passing pipelines** (and/or require pull requests). Then merges to that branch only succeed when the pipeline is green.
-
-Pipeline config: GitHub Actions workflows in `.github/workflows/`.
+**Branch protection:** In GitHub: **Settings → Rules → Rulesets** (or classic branch protection) for `main` / `develop`—require the CI check to pass before merge so broken changes do not land on protected branches.
 
 ---
 

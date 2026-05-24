@@ -61,7 +61,8 @@ func RevokeToken(next echo.HandlerFunc) echo.HandlerFunc {
 		var token *jwt.Token
 		token, err := jwt.Parse(tokens[1], func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-				LogW("%s [%s] invalid signing method token=%v", buildLogPrefix("RevokeToken"), requestID, token.Method.(*jwt.SigningMethodRSA))
+				// Never type-assert token.Method in this branch — non-RSA alg would panic (SEC-2).
+				LogW("%s [%s] invalid signing method alg=%s type=%T", buildLogPrefix("RevokeToken"), requestID, token.Method.Alg(), token.Method)
 				return nil, errors.New("invalid signing method")
 			}
 			pbKey := os.Getenv("APP_PUBLIC_KEY")
@@ -87,7 +88,24 @@ func RevokeToken(next echo.HandlerFunc) echo.HandlerFunc {
 			return ctx.JSON(response.Code, response)
 		}
 
-		timeData, _ := time.Parse("2006-01-02 15:04:05", tokenClaim["Expired"].(string))
+		expiredRaw, ok := tokenClaim["Expired"]
+		if !ok {
+			logVerifyTokenErr(ctx, requestID, "error : token missing Expired claim")
+			response.Unauthorized("invalid authorization token credentials", "")
+			return ctx.JSON(response.Code, response)
+		}
+		expiredStr, ok := expiredRaw.(string)
+		if !ok || strings.TrimSpace(expiredStr) == "" {
+			logVerifyTokenErr(ctx, requestID, "error : invalid Expired claim type or value")
+			response.Unauthorized("invalid authorization token credentials", "")
+			return ctx.JSON(response.Code, response)
+		}
+		timeData, err := time.Parse("2006-01-02 15:04:05", expiredStr)
+		if err != nil {
+			logVerifyTokenErr(ctx, requestID, "error : invalid Expired claim format")
+			response.Unauthorized("invalid authorization token credentials", "")
+			return ctx.JSON(response.Code, response)
+		}
 		currentTime := time.Now()
 		if currentTime.After(timeData) {
 			logVerifyTokenErr(ctx, requestID, "error : authorization token has expired")

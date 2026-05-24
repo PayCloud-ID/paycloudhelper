@@ -394,12 +394,12 @@ func TestPushMessageAudit_PushSucceeds(t *testing.T) {
 	go func() { notify <- amqp.Confirmation{Ack: true} }()
 
 	prevTO := PushTimeout
-	prevResend := amqpResendDelayForTest
+	prevResend := amqpResendDelayForTestNs.Load()
 	PushTimeout = 2 * time.Second
-	amqpResendDelayForTest = 2 * time.Millisecond
+	amqpResendDelayForTestNs.Store(uint64((2 * time.Millisecond).Nanoseconds()))
 	t.Cleanup(func() {
 		PushTimeout = prevTO
-		amqpResendDelayForTest = prevResend
+		amqpResendDelayForTestNs.Store(prevResend)
 	})
 
 	pushMessageAudit(MessagePayloadAudit{
@@ -431,14 +431,14 @@ func TestPushMessageAudit_PushFailure(t *testing.T) {
 
 	prevRetries := PushMaxRetries
 	prevTO := PushTimeout
-	prevResend := amqpResendDelayForTest
+	prevResend := amqpResendDelayForTestNs.Load()
 	PushMaxRetries = 2
 	PushTimeout = 300 * time.Millisecond
-	amqpResendDelayForTest = 3 * time.Millisecond
+	amqpResendDelayForTestNs.Store(uint64((3 * time.Millisecond).Nanoseconds()))
 	t.Cleanup(func() {
 		PushMaxRetries = prevRetries
 		PushTimeout = prevTO
-		amqpResendDelayForTest = prevResend
+		amqpResendDelayForTestNs.Store(prevResend)
 	})
 
 	pushMessageAudit(MessagePayloadAudit{

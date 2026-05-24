@@ -61,6 +61,7 @@ func TestGetTrxRedisBackoff(t *testing.T) {
 	defer os.Setenv("TRANSACTION_REDIS_BACKOFF", old)
 
 	t.Run("default when unset", func(t *testing.T) {
+		resetRedisClientStateForTesting()
 		os.Unsetenv("TRANSACTION_REDIS_BACKOFF")
 		got := GetTrxRedisBackoff()
 		if got != 10 {
@@ -68,6 +69,7 @@ func TestGetTrxRedisBackoff(t *testing.T) {
 		}
 	})
 	t.Run("env value when valid", func(t *testing.T) {
+		resetRedisClientStateForTesting()
 		os.Setenv("TRANSACTION_REDIS_BACKOFF", "25")
 		got := GetTrxRedisBackoff()
 		if got != 25 {
@@ -75,6 +77,7 @@ func TestGetTrxRedisBackoff(t *testing.T) {
 		}
 	})
 	t.Run("default when below minimum", func(t *testing.T) {
+		resetRedisClientStateForTesting()
 		os.Setenv("TRANSACTION_REDIS_BACKOFF", "5")
 		got := GetTrxRedisBackoff()
 		if got != 10 {
@@ -82,6 +85,7 @@ func TestGetTrxRedisBackoff(t *testing.T) {
 		}
 	})
 	t.Run("default when invalid", func(t *testing.T) {
+		resetRedisClientStateForTesting()
 		os.Setenv("TRANSACTION_REDIS_BACKOFF", "invalid")
 		got := GetTrxRedisBackoff()
 		if got != 10 {
@@ -95,6 +99,7 @@ func TestGetTrxRedisLockTimeout(t *testing.T) {
 	defer os.Setenv("TRANSACTION_REDIS_LOCK_TIMEOUT", old)
 
 	t.Run("default when unset", func(t *testing.T) {
+		resetRedisClientStateForTesting()
 		os.Unsetenv("TRANSACTION_REDIS_LOCK_TIMEOUT")
 		got := GetTrxRedisLockTimeout()
 		if got != 2000*time.Millisecond {
@@ -102,6 +107,7 @@ func TestGetTrxRedisLockTimeout(t *testing.T) {
 		}
 	})
 	t.Run("env value when valid and above min", func(t *testing.T) {
+		resetRedisClientStateForTesting()
 		os.Setenv("TRANSACTION_REDIS_LOCK_TIMEOUT", "3000")
 		got := GetTrxRedisLockTimeout()
 		if got != 3000*time.Millisecond {
@@ -109,6 +115,7 @@ func TestGetTrxRedisLockTimeout(t *testing.T) {
 		}
 	})
 	t.Run("default when below min 700", func(t *testing.T) {
+		resetRedisClientStateForTesting()
 		os.Setenv("TRANSACTION_REDIS_LOCK_TIMEOUT", "500")
 		got := GetTrxRedisLockTimeout()
 		if got != 2000*time.Millisecond {
@@ -116,6 +123,7 @@ func TestGetTrxRedisLockTimeout(t *testing.T) {
 		}
 	})
 	t.Run("default when invalid", func(t *testing.T) {
+		resetRedisClientStateForTesting()
 		os.Setenv("TRANSACTION_REDIS_LOCK_TIMEOUT", "abc")
 		got := GetTrxRedisLockTimeout()
 		if got != 2000*time.Millisecond {

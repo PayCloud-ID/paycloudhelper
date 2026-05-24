@@ -1,6 +1,6 @@
 # Logging — paycloudhelper
 
-The `paycloudhelper` library provides a structured, consistent logging API for all PayCloud microservices. It wraps [`kataras/golog`](https://github.com/kataras/golog) with pre-configured format and level shortcuts.
+The `paycloudhelper` library provides a structured, consistent logging API for all PayCloud microservices. It wraps `[kataras/golog](https://github.com/kataras/golog)` with pre-configured format and level shortcuts.
 
 ## Package Architecture
 
@@ -35,7 +35,7 @@ func init() {
 }
 ```
 
-The default log level is **`info`**, meaning `LogD` (debug) calls are **silent** in production.
+The default log level is `**info**`, meaning `LogD` (debug) calls are **silent** in production.
 
 ---
 
@@ -43,17 +43,19 @@ The default log level is **`info`**, meaning `LogD` (debug) calls are **silent**
 
 ### Root Package (`pchelper`)
 
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `pchelper.LogI` | `LogI(format string, args ...interface{})` | Info level — normal operations |
-| `pchelper.LogE` | `LogE(format string, args ...interface{})` | Error level — failures and errors |
-| `pchelper.LogW` | `LogW(format string, args ...interface{})` | Warning level — degraded but recoverable |
-| `pchelper.LogD` | `LogD(format string, args ...interface{})` | Debug level — verbose, silent at `info` level |
-| `pchelper.LogF` | `LogF(format string, args ...interface{})` | Fatal — logs then exits process |
-| `pchelper.LogJ` | `LogJ(arg interface{})` | Logs any value as compact JSON at Info level |
-| `pchelper.LogJI` | `LogJI(arg interface{})` | Logs any value as indented JSON at Info level |
-| `pchelper.LogErr` | `LogErr(err error)` | Logs an error value at Error level |
-| `pchelper.LogSetLevel` | `LogSetLevel(levelName string)` | Change active log level at runtime |
+
+| Function               | Signature                                  | Description                                   |
+| ---------------------- | ------------------------------------------ | --------------------------------------------- |
+| `pchelper.LogI`        | `LogI(format string, args ...interface{})` | Info level — normal operations                |
+| `pchelper.LogE`        | `LogE(format string, args ...interface{})` | Error level — failures and errors             |
+| `pchelper.LogW`        | `LogW(format string, args ...interface{})` | Warning level — degraded but recoverable      |
+| `pchelper.LogD`        | `LogD(format string, args ...interface{})` | Debug level — verbose, silent at `info` level |
+| `pchelper.LogF`        | `LogF(format string, args ...interface{})` | Fatal — logs then exits process               |
+| `pchelper.LogJ`        | `LogJ(arg interface{})`                    | Logs any value as compact JSON at Info level  |
+| `pchelper.LogJI`       | `LogJI(arg interface{})`                   | Logs any value as indented JSON at Info level |
+| `pchelper.LogErr`      | `LogErr(err error)`                        | Logs an error value at Error level            |
+| `pchelper.LogSetLevel` | `LogSetLevel(levelName string)`            | Change active log level at runtime            |
+
 
 ### Direct Logger Access
 
@@ -165,6 +167,7 @@ The logger outputs to stdout with the format:
 ```
 
 Example:
+
 ```
 [INFO] 2026-02-27 10:05:23.481 [InitRedis] connected host=redis:6379 db=0
 [ERRO] 2026-02-27 10:05:24.012 [GetMerchant] gRPC error merchant_code=MRC001 err=connection refused
@@ -213,15 +216,17 @@ import pchelper "github.com/PayCloud-ID/paycloudhelper"
 
 ### 3. Replace existing log calls
 
-| Before | After |
-|--------|-------|
-| `fmt.Println("started")` | `pchelper.LogI("[FuncName] started")` |
-| `fmt.Printf("val: %s", v)` | `pchelper.LogI("[FuncName] val=%s", v)` |
-| `fmt.Println(err)` | `pchelper.LogE("[FuncName] error: %v", err)` |
-| `log.Println("msg")` | `pchelper.LogI("[FuncName] msg")` |
-| `log.Printf("msg %s", v)` | `pchelper.LogI("[FuncName] msg %s", v)` |
-| `log.Fatal(err)` | `pchelper.LogF("[FuncName] fatal: %v", err)` |
-| `log.Println(struct)` | `pchelper.LogJ(struct)` |
+
+| Before                     | After                                        |
+| -------------------------- | -------------------------------------------- |
+| `fmt.Println("started")`   | `pchelper.LogI("[FuncName] started")`        |
+| `fmt.Printf("val: %s", v)` | `pchelper.LogI("[FuncName] val=%s", v)`      |
+| `fmt.Println(err)`         | `pchelper.LogE("[FuncName] error: %v", err)` |
+| `log.Println("msg")`       | `pchelper.LogI("[FuncName] msg")`            |
+| `log.Printf("msg %s", v)`  | `pchelper.LogI("[FuncName] msg %s", v)`      |
+| `log.Fatal(err)`           | `pchelper.LogF("[FuncName] fatal: %v", err)` |
+| `log.Println(struct)`      | `pchelper.LogJ(struct)`                      |
+
 
 ### 4. Verify build passes
 
@@ -280,3 +285,4 @@ import "github.com/PayCloud-ID/paycloudhelper/phlogger"
 phlogger.LogI("[FuncName] msg")
 phlogger.LogE("[FuncName] error: %v", err)
 ```
+

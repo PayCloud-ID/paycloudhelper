@@ -2,7 +2,7 @@ package phaudittrailv0
 
 import (
 	"crypto/tls"
-	"log"
+	"fmt"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -46,9 +46,6 @@ var auditV0PublishHook = func(ch *amqp.Channel, queueName string, body []byte) e
 
 // auditV0MaxTrialsForTest, when > 0, caps retry loops in startRQConnection (tests only).
 var auditV0MaxTrialsForTest int
-
-// auditV0ReturnChannelErrorForTest, when true, startRQConnection returns the channel error instead of panicking (tests only).
-var auditV0ReturnChannelErrorForTest bool
 
 // SetUpRabbitMq service must call this func in main function
 // NOTE : for audittrail purpose
@@ -129,10 +126,7 @@ func (r *RMqAutoConnect) startRQConnection() (conn *amqp.Connection, ch *amqp.Ch
 	r.ch, err = auditV0ChannelHook(r.conn)
 	if err != nil {
 		r.reset()
-		if auditV0ReturnChannelErrorForTest {
-			return nil, nil, err
-		}
-		log.Panicln(err.Error())
+		return nil, nil, fmt.Errorf("audit trail channel: %w", err)
 	}
 
 	phlogger.LogI("%s channel opened successfully", phhelper.BuildLogPrefix("startRQConnection"))
