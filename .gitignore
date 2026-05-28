@@ -21,10 +21,6 @@ coverage-func.txt
 # Go workspace file
 go.work
 
-# Agent / local planning artifacts (not versioned)
-.agents/plans/
-/docs/plans/*
-
 # IDE file
 .idea
 
