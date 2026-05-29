@@ -14,14 +14,18 @@
 
 ## ⚠️ Production Readiness Analysis (2026-05-25 review)
 
-This base plan was re-audited against the **actual** `paycloudhelper/redis.go` and each service's real config. The original "full delete + rewrite call sites" approach below is **NOT production-safe as written**. Ten defects were found, several breaking. The corrected strategy is **"Delegate, don't rewrite"** and lives in the per-service plans:
+This base plan was re-audited against the **actual** `paycloudhelper/redis.go` and each service's real config. The original "full delete + rewrite call sites" approach below is **NOT production-safe as written**. Ten defects were found, several breaking. The corrected strategy is **"Delegate, don't rewrite"** and lives in the per-service plans.
 
-| Per-service plan | Strategy |
-|---|---|
-| `2026-05-25-redis-migration-clientpg-module.md` | Delegate connection to pch, keep provider API |
-| `2026-05-25-redis-migration-transaction-module.md` | Delegate connection, keep provider API + lock semantics |
-| `2026-05-25-redis-migration-clientpg-manager.md` | Delegate connection, keep provider API |
-| `2026-05-25-redis-migration-config-module.md` | Delegate connection inside `RedisImpl`, keep `Cache` interface |
+**Six services, two groups.** Group A is already on go-redis **v9** (delegate only). Group B is still on go-redis **v8** (EOL) and needs a v8→v9 phase *before* delegating.
+
+| Per-service plan | Group | Strategy |
+|---|---|---|
+| `2026-05-25-redis-migration-clientpg-module.md` | A (v9) | Delegate connection to pch, keep provider API |
+| `2026-05-25-redis-migration-transaction-module.md` | A (v9) | Delegate connection, keep provider API + lock semantics |
+| `2026-05-25-redis-migration-clientpg-manager.md` | A (v9) | Delegate connection, keep provider API |
+| `2026-05-25-redis-migration-config-module.md` | A (v9) | Delegate connection inside `RedisImpl`, keep `Cache` interface |
+| `2026-05-25-redis-migration-settlementpg-module.md` | **B (v8→v9)** | v8→v9 first, **keep** redsync lock, then delegate |
+| `2026-05-25-redis-migration-settlement-manager.md` | **B (v8→v9)** | v8→v9 first, **delete dead** redsync, then delegate |
 
 ### Defects found in the original approach
 
@@ -49,9 +53,36 @@ This base plan was re-audited against the **actual** `paycloudhelper/redis.go` a
 
 **Why this is the production-safe choice:** zero call-site edits (no typo risk across 75+ sites), exact behavioral parity (miss/lock/marshal semantics unchanged), trivial rollback (revert one file + `go.mod`), and it leans only on stable pch APIs. The file `providers/redis.go` is **gutted to a thin adapter**, not deleted — collapsing the adapter further is a separate, optional Phase 2 once parity is confirmed in production.
 
+### Group B addendum — go-redis v8 services (`settlementpg-module`, `settlement-manager`)
+
+Added 2026-05-25 after scanning two more services. Both run their **own** provider on **`github.com/go-redis/redis/v8 v8.11.5`** (EOL) and on `paycloudhelper v1.9.1`.
+
+> **Scope correction:** an earlier fleet scan in this effort mislabeled `settlementpg-module` as "already OK (no provider)". That was wrong — its provider is nested at **`app/providers/redis.go`**, which the original `find` (looking only for `providers/redis.go`) missed. It does have a per-service provider.
+
+**Which of the five migration issues actually apply to these two** (verified against code):
+
+| Issue | settlementpg-module | settlement-manager |
+|---|---|---|
+| #1 Double pool | ❌ N/A — never calls a pch redis init | ❌ N/A |
+| #2 Unfixed races | ⚠️ Latent only (unsynchronized `RedisPoolClient` lazy init) | ⚠️ Latent only |
+| #3 **go-redis v8 EOL** | ✅ **Primary driver** (`IdleTimeout`/`MaxConnAge` v8 fields) | ✅ **Primary driver** |
+| #4 `os.Getenv` lock hot-path | ❌ N/A — no per-op env reads | ❌ N/A |
+| #5 Divergent behavior | ✅ (3rd password var spelling `REDIS_PASS`) | ✅ |
+
+So Group B is driven by **#3 (EOL) and #5 (divergence)**, not the double-pool/hot-path issues that motivated Group A. **Urgency is lower; effort-per-service is higher** (v8→v9 API changes precede delegation), but the surface is small (8 and 15 call sites; 4 trivial ops).
+
+**Two extra rules unique to Group B** (the v9 services don't need these):
+
+1. **Phase A (v8→v9) must precede delegation.** The provider funcs use v8 `*redis.Client`, which is **type-incompatible** with pch's v9 client returned by `GetRedisPoolClient()`. Swap `go-redis/redis/v8 → redis/go-redis/v9` and rename v8-only fields **`IdleTimeout → ConnMaxIdleTime`**, **`MaxConnAge → ConnMaxLifetime`** first. (v9 is already an *indirect* dep via paycloudhelper, so no new module.)
+2. **redsync differs between the two:**
+   - `settlementpg-module` **uses** redsync (`app/services/transaction.go:146` `RedisSync.NewMutex` + `mutex.Lock()`). **Keep it** — migrate the pool adapter `goredis/v8 → goredis/v9`; the redsync v4 lock API and lock key are unchanged.
+   - `settlement-manager`'s redsync is **dead code** (no `NewMutex` anywhere). **Delete** `RedisSync` + `InitRedSync()` + the redsync/goredis imports.
+
+Env-var parity for both: build options from the same `helpers.Getenv(...)` calls — **`REDIS_PASS`** (note: not `REDIS_PASSWORD`/`REDIS_PWD`), and `REDIS_DB` has **no default** (errors when unset — preserve).
+
 ---
 
-> **⛔ The per-service task sections below are the ORIGINAL "full-delete" approach. They are retained for reference only and are superseded by the four per-service plan files. Do NOT execute them as written — they contain defects F1–F9. Use the per-service plans instead.**
+> **⛔ The per-service task sections below are the ORIGINAL "full-delete" approach, covering only the four Group A (v9) services. They are retained for reference only and are superseded by the six per-service plan files (four Group A + two Group B). Do NOT execute them as written — they contain defects F1–F9, and they do not cover the Group B v8→v9 services at all. Use the per-service plans instead.**
 
 ---
 
