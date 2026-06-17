@@ -16,7 +16,7 @@
 
 This base plan was re-audited against the **actual** `paycloudhelper/redis.go` and each service's real config. The original "full delete + rewrite call sites" approach below is **NOT production-safe as written**. Ten defects were found, several breaking. The corrected strategy is **"Delegate, don't rewrite"** and lives in the per-service plans.
 
-**Six services, two groups.** Group A is already on go-redis **v9** (delegate only). Group B is still on go-redis **v8** (EOL) and needs a v8→v9 phase *before* delegating.
+**Six services, two groups.** Group A is already on go-redis **v9** (delegate only). Group B is still on go-redis **v8** (EOL) and needs a v8→v9 phase *before* delegating. **(2026-06-08: a Group C addendum below adds 5 SNAP-BI interface managers that are on go-redis v8 and need the v9 import bump only — no pool delegation.)**
 
 | Per-service plan | Group | Strategy |
 |---|---|---|
@@ -79,6 +79,27 @@ So Group B is driven by **#3 (EOL) and #5 (divergence)**, not the double-pool/ho
    - `settlement-manager`'s redsync is **dead code** (no `NewMutex` anywhere). **Delete** `RedisSync` + `InitRedSync()` + the redsync/goredis imports.
 
 Env-var parity for both: build options from the same `helpers.Getenv(...)` calls — **`REDIS_PASS`** (note: not `REDIS_PASSWORD`/`REDIS_PWD`), and `REDIS_DB` has **no default** (errors when unset — preserve).
+
+---
+
+## Group C addendum — SNAP-BI interface managers (v8→v9 only)
+
+Added 2026-06-08 after a full sweep of all 9 `*interface-manager` repos in `go/src`. Five SNAP-BI interface managers still run **`github.com/go-redis/redis/v8 v8.11.5`** on **`paycloudhelper v1.9.1`** and use Redis (external-id dedup / token cache). They were **not** in the original six-service scope.
+
+| Repo | go-redis | paycloudhelper | Redis pool | v9 action |
+|---|---|---|---|---|
+| paycloud-be-paydiainterface-manager | **v8** | v1.9.1 | pch shared (no own pool) | v8→v9 import bump |
+| paycloud-be-gdvinterface-manager | **v8** | v1.9.1 | pch shared | v8→v9 import bump |
+| paycloud-be-nobuinterface-manager | **v8** | v1.9.1 | pch shared | v8→v9 import bump |
+| paycloud-be-bagsnapinterface-manager | **v8** | v1.9.1 | pch shared | v8→v9 import bump |
+| paycloud-be-snapbiinterface-manager | **v8** | v1.9.1 | pch shared | v8→v9 import bump |
+
+**Already on v9 (no action):** `qoinhubinterface-manager` (pch `v1.9.2-beta.1` + go-redis/v9).
+**No Redis at all (no action):** `bagqrisinterface-manager`, `ftsnapinterface-manager`, `qrisinterface-manager`.
+
+**Scope is lighter than Group A/B.** All five already delegate to the **pch shared pool** (`pchelper.GetRedisPoolClient()` via a thin `RedisHelper`; the only `redis.NewClient` calls are in `*_test.go`). So there is **no "delegate the pool" work** here — they need only the mechanical **v8→v9 import swap** (`github.com/go-redis/redis/v8` → `github.com/redis/go-redis/v9`; rename `IdleTimeout → ConnMaxIdleTime` if set) when they bump `paycloudhelper` to v2.x. None use redsync/distributed locks. **No key changes** — key naming is handled separately by the namespacing/TTL plan.
+
+> **Coordination with the namespacing plan:** four of these (paydia, gdv, nobu, bagsnap) also carry the `snap_external_id_* → snapbi:external-id:*` rename on their `feat/redis` branch (Task 3.8 of `paycloud-docs/backend/redis/2026-05-23-redis-key-namespacing-and-ttl-fixes.md`). Sequence the v9 bump and the key rename on the **same branch** so `middlewares/externalbi.go` is touched once. `snapbiinterface-manager` has **no** key rename (its `snapbi_int:*` keyspace is already namespaced and separate) — it needs the v9 bump only.
 
 ---
 
