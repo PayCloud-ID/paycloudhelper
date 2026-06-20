@@ -1,11 +1,11 @@
-# Consumer SDK Upgrade Policy
+# S3MinIO Consumer Upgrade Policy
 
-This policy defines how consumer services adopt paycloudhelper SDK updates safely.
+This policy defines how consumer services adopt paycloudhelper S3MinIO SDK updates safely. A generic upgrade policy covering other SDKs may be introduced when additional SDKs land under `sdk/services/`.
 
 ## Cadence
 
 - Dependency update cadence: weekly.
-- Recommended automation: scheduled dependency PR for `github.com/PayCloud-ID/paycloudhelper`.
+- Automation (optional but recommended): Dependabot, Renovate, or any tool that opens a scheduled dependency PR for `github.com/PayCloud-ID/paycloudhelper`. Manual weekly upgrades are acceptable provided cadence and validation rules below are met.
 - Emergency patch upgrades: immediate for security or production-impacting fixes.
 
 ## Version Pinning

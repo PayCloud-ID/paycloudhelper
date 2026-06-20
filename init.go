@@ -15,12 +15,19 @@ func init() {
 	InitializeApp()
 }
 
-// findEnvPath returns a path to .env by trying, in order: ENV_FILE, CWD, parent dirs, executable dir.
-// Empty string means no .env was found. Used so apps find .env when run from IDE, subdirs, or different cwd.
+// findEnvPath returns a path to .env by trying, in order: ENV_FILE/DOTENV_PATH
+// overrides, CWD, parent dirs, executable dir, then the common container mount
+// targets /app/.env and /.env. Empty string means no .env was found. Used so
+// apps find .env when run from an IDE, a subdir, a different cwd, or a container
+// where the binary lives outside the secret mount directory.
 func findEnvPath() string {
-	if p := os.Getenv("ENV_FILE"); p != "" {
-		if _, err := os.Stat(p); err == nil {
-			return p
+	// Explicit operator overrides win. Both names are accepted so services that
+	// standardized on either ENV_FILE or DOTENV_PATH keep working.
+	for _, key := range []string{"ENV_FILE", "DOTENV_PATH"} {
+		if p := os.Getenv(key); p != "" {
+			if _, err := os.Stat(p); err == nil {
+				return p
+			}
 		}
 	}
 	if wd, err := os.Getwd(); err == nil {
@@ -42,6 +49,12 @@ func findEnvPath() string {
 	}
 	if exe, err := os.Executable(); err == nil {
 		p := filepath.Join(filepath.Dir(exe), ".env")
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	// Common container secret mount targets, checked last so local dev (cwd) wins.
+	for _, p := range []string{"/app/.env", "/.env"} {
 		if _, err := os.Stat(p); err == nil {
 			return p
 		}

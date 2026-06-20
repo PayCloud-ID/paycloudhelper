@@ -117,7 +117,8 @@ func BuildUploadRequestForFile(userID, merchantID int64, path, fileLocation stri
 		return req, err
 	}
 	req.Content = buf
-	req.Filename = f.Name()
+	// Get only the file name (without the directory) and set it as the filename in the request.
+	req.Filename = filepath.Base(f.Name())
 	req.Size = uint64(sz)
 	req.ContentType = mime.TypeByExtension(filepath.Ext(fileLocation))
 	return req, nil
