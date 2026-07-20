@@ -9,8 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.11.0] - 2026-07-20
+
 ### Added
 
+- **`phdb`**: shared `database/sql` pool configurator (`DefaultPoolConfig`, `LoadPoolConfig`,
+  `Validate`, `Apply`, `OpenAndApply`) with family prefixes (`DB`, `DB_ACC`, `DB_RPL`),
+  forbidden unbounded `MaxOpenConns`, and up to +10% `ConnMaxLifetime` jitter. See
+  paycloud-docs `plans/2026-07-07-pool-config-helper-and-sizing-plan.md` Part A.
 - **CI**: `go test -race ./...` in `.github/workflows/ci.yml` to catch concurrency regressions.
 - **Tests**: placeholder tests for `sdk/shared/errors`, `sdk/shared/observability`, and
   `sdk/shared/transport` (packages reserved for future shared SDK helpers).

@@ -26,6 +26,8 @@ require (
 	google.golang.org/protobuf v1.36.11
 )
 
+require github.com/DATA-DOG/go-sqlmock v1.5.2 // indirect
+
 require (
 	github.com/alicebob/gopher-json v0.0.0-20230218143504-906a9b012302 // indirect
 	github.com/alicebob/miniredis/v2 v2.34.0
