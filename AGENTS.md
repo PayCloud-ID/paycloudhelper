@@ -295,7 +295,7 @@ Does the change touch an EXISTING exported function signature?
 | Middleware Development | `.agents/skills/middleware-development/` | Adding/modifying Echo middleware, response handling |
 | Redis Patterns | `.agents/skills/redis-patterns/` | Redis init, store/get, distributed locks, key conventions |
 | Library Maintenance | `.agents/skills/library-maintenance/` | Versioning, deprecation, subpackage rules, release workflow |
-| Redis v9 Consumer Migration Core | `.agents/skills/redis-v9-consumer-migration-core/` | Upgrading service dependency from paycloudhelper v1.x to v2.x safely |
+| Redis v9 Consumer Migration Core | `.agents/skills/redis-v9-consumer-migration-core/` | Upgrading a service across paycloudhelper v1.10.0 — the go-redis v9 break — e.g. v1.9.x → v1.10.0+ |
 | Redis v9 Migration for Echo APIs | `.agents/skills/redis-v9-consumer-migration-echo-api/` | Migrating API services using paycloudhelper middleware and Redis request-path logic |
 | Redis v9 Migration for Workers | `.agents/skills/redis-v9-consumer-migration-worker/` | Migrating queue/consumer services using distributed locks and retries |
 | Redis v9 Migration for Schedulers | `.agents/skills/redis-v9-consumer-migration-scheduler/` | Migrating cron/job services that require singleton execution locks |

@@ -1,6 +1,6 @@
 ---
 name: redis-v9-consumer-migration-core
-description: Guides PayCloud consumer services through safe migration from paycloudhelper v1.x to v2.x with redis/go-redis/v9 compatibility and rollout controls.
+description: Guides PayCloud consumer services through safe migration across paycloudhelper v1.10.0 — the release that aligned on redis/go-redis/v9 — so any bump from v1.9.x to v1.10.0 or later, with compatibility and rollout controls.
 applyTo: '**/*.go, **/go.mod, **/.env*, **/config*.go'
 ---
 
@@ -8,9 +8,15 @@ applyTo: '**/*.go, **/go.mod, **/.env*, **/config*.go'
 
 ## Use When
 
-- A consumer service upgrades `github.com/PayCloud-ID/paycloudhelper` to `v2.x`.
+- A consumer service upgrades `github.com/PayCloud-ID/paycloudhelper` across **`v1.10.0`** — most
+  commonly a bump from `v1.9.x` to `v1.10.0+` (`v1.10.x`, `v1.11.0`, …).
 - The service currently imports `github.com/go-redis/redis/v8` directly.
 - Teams need a production-safe rollout and rollback path.
+
+> ⚠️ **The break is `v1.10.0`, not `v2.0.0`** — see the README's Consumer Migration section. No `v2.x`
+> tag exists, so `go get …@v2.0.0` 404s. Treat any `v2.x` reference as `v1.10.0+`. And because `v1.9.1`
+> (2026-04-29) post-dates `v1.10.0` (2026-04-24) as a pre-break back-patch, judge by version, never by
+> release date.
 
 ## Breaking Change Surface
 
@@ -23,7 +29,8 @@ applyTo: '**/*.go, **/go.mod, **/.env*, **/config*.go'
 1. Update module dependency:
 
 ```bash
-go get github.com/PayCloud-ID/paycloudhelper@v2.0.0
+# Any target >= v1.10.0 crosses the break; v1.11.0 is the latest tag.
+go get github.com/PayCloud-ID/paycloudhelper@v1.11.0
 go mod tidy
 ```
 

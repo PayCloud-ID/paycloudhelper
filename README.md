@@ -24,7 +24,7 @@ Go: 1.25 (toolchain pinned via `go.mod`)
 - [Configuration](#configuration)
 - [Testing](#testing)
 - [Verifying the library](#verifying-the-library)
-- [Consumer Migration (v2.0.0 / Redis v9)](#consumer-migration-v200--redis-v9)
+- [Consumer Migration (v1.10.0 / Redis v9)](#consumer-migration-v1100--redis-v9)
 - [CI (GitHub Actions)](#ci-github-actions)
 - [Versioning](#versioning)
 - [Automation Prompts](#automation-prompts)
@@ -609,16 +609,26 @@ Or use the script: `./scripts/run_tests.sh` (add `-race` for race detection).
 
 ---
 
-## Consumer Migration (v2.0.0 / Redis v9)
+## Consumer Migration (v1.10.0 / Redis v9)
 
-`paycloudhelper` v2.0.0 introduces a major dependency alignment on `github.com/redis/go-redis/v9`.
-Consumer services should treat this as a coordinated migration, not only a module bump.
+`paycloudhelper` **v1.10.0** aligned the library on `github.com/redis/go-redis/v9`. Consumer services
+should treat this as a coordinated migration, not only a module bump.
+
+> ⚠️ **This shipped as `v1.10.0`, not `v2.0.0`.** The CHANGELOG entry for `v1.10.0` (2026-04-24) is
+> labelled *"Changed (Breaking)"* for exactly this change, and consumers confirm it —
+> `fundtransfer-manager` runs `v1.10.4` with `go-redis/v9 v9.18.0`. **No `v2.x` tag exists**; the tag
+> list currently tops out at `v1.11.0`. Docs and skills here previously said `v2.0.0`, which appears to
+> have been the *intended* number for a breaking change that was published on the `v1.x` line — any
+> `go get …@v2.0.0` fails with a 404. Anything below reading `v2.x` means **`v1.10.0` or later**.
+>
+> Note also that **tag dates are not in version order**: `v1.9.1` is dated 2026-04-29, *after*
+> `v1.10.0`, because it is a back-patch on the pre-break line. Judge by version, not release date.
 
 ### Migration Checklist for Consumer Services
 
-1. Update module dependency:
+1. Update module dependency (any target `>= v1.10.0` crosses the break; `v1.11.0` is the latest tag):
    ```bash
-   go get github.com/PayCloud-ID/paycloudhelper@v2.0.0
+   go get github.com/PayCloud-ID/paycloudhelper@v1.11.0
    go mod tidy
    ```
 2. Replace direct Redis imports from `github.com/go-redis/redis/v8` to `github.com/redis/go-redis/v9`.
