@@ -23,6 +23,14 @@ var (
 	auditNotReadyLogWindow = 30 * time.Second
 )
 
+const (
+	// auditPublishOkLogKey/Window rate-limit the successful-publish line to one
+	// heartbeat per window. Callers publish one audit message per request, so at
+	// info this line scaled with request volume while saying the same thing.
+	auditPublishOkLogKey    = "audit_publish_ok"
+	auditPublishOkLogWindow = time.Minute
+)
+
 // nextAuditID returns a unique, monotonically increasing ID for audit messages.
 func nextAuditID() int {
 	return int(auditIDCounter.Add(1))
@@ -85,7 +93,11 @@ func LogAudittrailData(funcName, desc, source, commType string, key *[]string, d
 		return
 	}
 
-	LogI("%s func=%s desc=%s source=%s type=%s", buildLogPrefix("LogAudittrailData"), funcName, desc, source, commType)
+	// Debug, not info: this echo carries no transaction identifier, so it cannot
+	// confirm that any particular record was audited — only that the path ran.
+	// The record itself is published to the audit queue, which is the system of
+	// record. At info it cost ~15k lines per 18 minutes in a single service.
+	LogD("%s func=%s desc=%s source=%s type=%s", buildLogPrefix("LogAudittrailData"), funcName, desc, source, commType)
 
 	go func() {
 		//set data audit trail
@@ -160,7 +172,14 @@ func pushMessageAudit(data interface{}) {
 		return
 	}
 
-	LogI("%s publish message async success queue=%s conn=%s", buildLogPrefix("pushMessageAudit"), auditTrailQueueName, client.connName)
+	// One liveness heartbeat per window instead of one line per message: a
+	// per-message success ack is byte-identical every time and was the single
+	// highest-volume line in production. The rate limiter appends the suppressed
+	// count, so the heartbeat also reports audit throughput. Failures are
+	// unaffected — they log at error with Sentry above.
+	LogIRatedW(auditPublishOkLogKey, auditPublishOkLogWindow,
+		"%s publish message async success queue=%s conn=%s",
+		buildLogPrefix("pushMessageAudit"), auditTrailQueueName, client.connName)
 }
 
 // logAuditNotReadyRateLimited logs audit client-not-ready errors at most once per auditNotReadyLogWindow

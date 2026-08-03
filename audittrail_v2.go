@@ -84,7 +84,8 @@ func LogAudittrailDataV2(funcName, desc, source, commType string, key *[]string,
 		return
 	}
 
-	LogI("[LogAudittrailDataV2] func=%s desc=%s source=%s type=%s", funcName, desc, source, commType)
+	// Debug, not info — see LogAudittrailData in audittrail.go for the rationale.
+	LogD("[LogAudittrailDataV2] func=%s desc=%s source=%s type=%s", funcName, desc, source, commType)
 
 	dataAudittrail := &AuditTrailData{
 		Subject:           GetAppName(),
