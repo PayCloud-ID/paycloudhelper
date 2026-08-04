@@ -11,6 +11,25 @@
 | Rules | `.agents/rules/` | Development rules and patterns |
 | Improvements backlog | `.github/IMPROVEMENTS.md` | Known issues, P0–P3 priorities |
 
+## Platform documentation hub — `paycloud-docs`
+
+Architecture, data flows, designs, plans, PostgreSQL-migration material, DDL snapshots, `.env`
+captures and Postman collections for the **whole PayCloud platform** live in the
+[`paycloud-docs`](https://github.com/PayCloud-ID/paycloud-docs) repo, not here.
+
+- **Before any non-trivial task** — analysis, design, planning, migration, cross-service debugging,
+  "how does X work", doc writing — read [`paycloud-docs/AGENTS.md`](https://github.com/PayCloud-ID/paycloud-docs/blob/master/AGENTS.md) and route from
+  its Quick Reference + directory tables. That file is the maintained index; this section is only a
+  pointer to it, deliberately not a copy.
+- **Live code wins.** `paycloud-docs` is the map, and parts of it go stale. On a real conflict follow
+  the code in this repo, and flag the divergence rather than trusting the doc.
+- **New analysis / plans / designs belong in `paycloud-docs`** — matching subtree, following its
+  `AGENTS.md` conventions. Keep this repo's own `docs/` for repo-local material only.
+- **Two timelines + one FT vertical — do not conflate:** `backend/` = current-state Go, `nestjs/` =
+  target-state NestJS, `be-fundtransfer/` + `nestjs/ft/` = Fund Transfer.
+- Most relevant here: [`backend/docs/README.md`](https://github.com/PayCloud-ID/paycloud-docs/blob/master/backend/docs/README.md) (current-state Go
+  architecture, 01–16) and [`flow/README.md`](https://github.com/PayCloud-ID/paycloud-docs/blob/master/flow/README.md) (FE→BE→DB walkthroughs).
+
 ## Repository Overview
 
 **Go shared library** (`github.com/PayCloud-ID/paycloudhelper`) providing common utilities to all PayCloud Hub microservices. This is **not a standalone service** — it is imported by ~30 consumer services.
