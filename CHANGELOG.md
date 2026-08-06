@@ -9,6 +9,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.11.1] - 2026-08-03
+
+### Changed
+
+- **`audittrail`**: demote the per-event echo to debug and rate-limit the publish-success
+  line. High-volume callers (bulk imports, batch jobs) were emitting one log line per audit
+  event. Consumers should expect **fewer** audit log lines after upgrading — this is the fix,
+  not a regression. Back-ported to the go-1.24 support line as `v1.9.2-beta.2`.
+
+### Documentation
+
+- Consumer migration docs corrected: the go-redis v9 break shipped in **`v1.10.0`**, not a
+  `v2.0.0` (that tag does not exist and never will — see the `v1.9.2-beta` note below).
+
+---
+
+## The `v1.9.2-beta` line — go 1.24 support, still maintained
+
+**Not an abandoned pre-release.** `v1.9.2-beta.*` is a **parallel support line for consumers that
+cannot run go 1.25**, branched from `v1.9.1` and kept alive alongside the `v1.10.x` / `v1.11.x`
+mainline. Every other release from `v1.9.1` onward declares `go 1.25.0`, so a go-1.24 service
+**cannot** take them — `go get …@v1.10.0+` transitively forces the toolchain up and breaks the build.
+
+| | |
+|---|---|
+| **Go** | `1.24.0` (the only v9-bearing tags that build on go 1.24) |
+| **Redis** | `redis/go-redis/v9 v9.18.0` — the v8→v9 migration **is** included |
+| **TTL soft-clamp** | ❌ not included — that lands at `v1.10.2` on the mainline |
+| **Current consumers** | `paycloud-be-qoinhubinterface-manager` (`beta.2`), `paycloud-be-callback-manager` (`beta.1`) |
+
+**Do not "upgrade" those two services off this line without resolving their toolchain constraint
+first.** The constraints are unrelated to each other:
+
+- **`qoinhubinterface-manager` — hard vendor constraint.** QoinHub still issues **1024-bit RSA**
+  keys for B2B signatures. Go 1.25's `crypto/rsa` enforces a ≥2048-bit minimum and rejects
+  1024-bit operations, breaking signature verification at token generation. Blocked until QoinHub
+  migrates to RSA-2048; nothing on our side can lift it.
+- **`callback-manager` — build-toolchain workaround.** `sonic/loader` (pulled via echo's
+  linux/amd64 JIT path) references `runtime.lastmoduledatap`, which go 1.24's strict linkname
+  enforcement rejects; CI passes `-ldflags=-checklinkname=0` as the documented escape hatch. Note
+  the stated driver was *keeping paycloudhelper at `v1.9.2-beta.1`*, and go 1.25 allowlists that
+  symbol — so this pin may be self-imposed and reversible. Verify before assuming it is load-bearing.
+
+### [v1.9.2-beta.2] - 2026-08-03
+
+- Back-port of `v1.11.1`'s audit-trail log-volume change to the go-1.24 line.
+
+### [v1.9.2-beta.1] - 2026-05-06
+
+- **Go toolchain**: `go 1.25.0` → **`go 1.24.0`**, forking the go-1.24 support line off `v1.9.1`.
+- Carries the go-redis **v8 → v9** migration, so consumers on this line are already on v9 —
+  they are *below* the `v1.10.0` GA break but *past* the Redis change. Judge by capability, not
+  by version ordering.
+
+---
+
 ## [v1.11.0] - 2026-07-20
 
 ### Added

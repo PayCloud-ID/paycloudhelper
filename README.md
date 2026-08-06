@@ -624,12 +624,34 @@ should treat this as a coordinated migration, not only a module bump.
 > Note also that **tag dates are not in version order**: `v1.9.1` is dated 2026-04-29, *after*
 > `v1.10.0`, because it is a back-patch on the pre-break line. Judge by version, not release date.
 
+### ⛔ Two services must NOT be migrated — the `v1.9.2-beta` go-1.24 line
+
+Before bumping any service, check whether it declares `go 1.24.0`. Two do, and for them a bump to
+`v1.10.0+` **breaks the build** — every release from `v1.10.0` on declares `go 1.25.0`, which
+transitively forces the consumer's toolchain up.
+
+| Service | Pin | Why it cannot move |
+|---|---|---|
+| `paycloud-be-qoinhubinterface-manager` | `v1.9.2-beta.2` | **Hard vendor constraint.** QoinHub issues 1024-bit RSA keys; go 1.25's `crypto/rsa` enforces ≥2048-bit and rejects them, breaking B2B signature verification. Blocked until QoinHub migrates to RSA-2048 |
+| `paycloud-be-callback-manager` | `v1.9.2-beta.1` | **Build workaround.** `sonic/loader` linkname rejection under go 1.24's strict enforcement, escaped via `-ldflags=-checklinkname=0`. May be self-imposed — verify before treating it as load-bearing |
+
+`v1.9.2-beta.*` is a **maintained parallel support line**, not an abandoned pre-release: it forks
+from `v1.9.1`, already carries the go-redis **v9** migration, and receives back-ports (`beta.2` took
+`v1.11.1`'s audit-trail fix). It does **not** carry the TTL soft-clamp, which lands at `v1.10.2`.
+Full rationale in [CHANGELOG.md](CHANGELOG.md#the-v192-beta-line--go-124-support-still-maintained).
+
+**If a service is on `v1.9.2-beta.*`, leave the pin alone and say why in your PR.** The correct fix
+is to lift the toolchain constraint first; the pchelper bump follows for free.
+
 ### Migration Checklist for Consumer Services
 
-1. Update module dependency (any target `>= v1.10.0` crosses the break; `v1.11.0` is the latest tag):
+1. Update module dependency (any target `>= v1.10.0` crosses the break; `>= v1.10.2` also gets the
+   Redis TTL soft-clamp; **`v1.11.1` is the latest tag**). Confirm first that the service is not on
+   the go-1.24 line above:
    ```bash
-   go get github.com/PayCloud-ID/paycloudhelper@v1.11.0
+   go get github.com/PayCloud-ID/paycloudhelper@v1.11.1
    go mod tidy
+   git diff go.mod   # confirm the `go` directive did not move to 1.25 on a go-1.24 service
    ```
 2. Replace direct Redis imports from `github.com/go-redis/redis/v8` to `github.com/redis/go-redis/v9`.
 3. Keep startup initialization through `InitializeRedisWithRetry` and preserve key naming conventions.
