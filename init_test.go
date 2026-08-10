@@ -3,6 +3,9 @@ package paycloudhelper
 import (
 	"os"
 	"testing"
+
+	"github.com/PayCloud-ID/paycloudhelper/pcauth"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestSetAppName_GetAppName(t *testing.T) {
@@ -41,5 +44,32 @@ func TestInitializeApp_LoadsEnv(t *testing.T) {
 	}
 	if got := GetAppEnv(); got != "develop" {
 		t.Errorf("after InitializeApp GetAppEnv() = %q, want develop", got)
+	}
+}
+
+func TestInitializeApp_ConfiguresBcryptCost(t *testing.T) {
+	t.Setenv("BCRYPT_COST", "6")
+	t.Cleanup(InitializeApp)
+
+	InitializeApp()
+	assertGeneratedCost(t, 6)
+
+	// Consumer tests and staged rotations change BCRYPT_COST after package init.
+	t.Setenv("BCRYPT_COST", "7")
+	assertGeneratedCost(t, 7)
+}
+
+func assertGeneratedCost(t *testing.T, want int) {
+	t.Helper()
+	_, hash, err := pcauth.GenerateHashAndSalt("hunter2")
+	if err != nil {
+		t.Fatalf("GenerateHashAndSalt: %v", err)
+	}
+	cost, err := bcrypt.Cost([]byte(hash))
+	if err != nil {
+		t.Fatalf("bcrypt.Cost: %v", err)
+	}
+	if cost != want {
+		t.Fatalf("bcrypt cost=%d, want %d", cost, want)
 	}
 }

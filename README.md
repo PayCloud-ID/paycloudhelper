@@ -124,6 +124,7 @@ For the full Redis integration walkthrough, env vars, locking, and per-service m
 | `phhelper`             | `phhelper/`             | Global state (`APP_NAME`, `APP_ENV`), JSON/string helpers                                                     |
 | `phaudittrailv0`       | `phaudittrailv0/`       | Legacy v0 audit trail (RabbitMQ)                                                                              |
 | `phjson`               | `phjson/`               | Sonic JSON wrapper for high-throughput consumers                                                              |
+| `pcauth`               | `pcauth/`               | Canonical UUID-salted bcrypt password hashing and cost-upgrade verification                                   |
 | `sdk/services/s3minio` | `sdk/services/s3minio/` | Service-scoped S3MinIO SDK (helper, grpc, http bridge, pb, proto, facade)                                     |
 | `sdk/shared`           | `sdk/shared/`           | Shared runtime placeholders for transport, observability, and error normalization across future SDKs          |
 
@@ -348,6 +349,33 @@ client, err := pch.GetRedisPoolClient() // raw *redis.Client for pipelines, Lua,
 
 Full guide: **[docs/redis-integration.md](docs/redis-integration.md)**
 
+### Password Hashing (`pcauth`)
+
+Use `pcauth` for persisted PayCloud passwords. It preserves the deployed scheme: bcrypt hashes
+`plaintext + UUID salt`, in that order. New hashes default to bcrypt cost 10; `InitializeApp()` reads
+`BCRYPT_COST` and clamps numeric overrides to bcrypt's minimum cost through 14. An absent or invalid
+value keeps the default.
+
+```go
+import "github.com/PayCloud-ID/paycloudhelper/pcauth"
+
+salt, hash, err := pcauth.GenerateHashAndSalt(plaintext)
+if err != nil {
+    return err
+}
+
+result, err := pcauth.VerifyAndMaybeRehash(plaintext, salt, hash)
+if err != nil {
+    return err
+}
+if result.Matched && result.NeedsRehash {
+    // Persist result.NewSalt and result.NewHash together.
+}
+```
+
+Services that import `pcauth` without importing the root package can configure the cost explicitly
+at startup with `pcauth.ConfigureCost(cost)`.
+
 ### Sentry Error Tracking
 
 Initialize Sentry for error tracking. A non-empty `Dsn` is required; an empty DSN skips initialization.
@@ -493,6 +521,7 @@ All configuration is loaded from environment variables in `InitializeApp()`:
 | -------------------------------- | ---------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `APP_NAME`                       | Yes        | `""`        | Service name (used in Sentry, logs)                                                                                                                        |
 | `APP_ENV`                        | Yes        | `""`        | `develop` / `staging` / `production`                                                                                                                       |
+| `BCRYPT_COST`                    | No         | `10`        | Cost for new and upgraded password hashes; numeric values are clamped to bcrypt minimum–14, invalid values use 10                                         |
 | `REDIS_HOST`                     | For Redis  | `""`        | Redis server                                                                                                                                               |
 | `REDIS_PORT`                     | For Redis  | `6379`      | Redis port                                                                                                                                                 |
 | `REDIS_PASSWORD`                 | No         | `""`        | Redis auth                                                                                                                                                 |
@@ -511,7 +540,7 @@ All configuration is loaded from environment variables in `InitializeApp()`:
 
 ## Testing
 
-Unit tests cover helpers, headers, configuration, response handling, Redis options/mutex/LockError, init/app env, validator rules, and subpackages (`phhelper`, `phjson`, `phlogger`, `phsentry`). Integration tests for Redis and middleware are skipped by default (require Redis/Echo).
+Unit tests cover helpers, headers, configuration, response handling, Redis options/mutex/LockError, init/app env, validator rules, and subpackages (`pcauth`, `phhelper`, `phjson`, `phlogger`, `phsentry`). Integration tests for Redis and middleware are skipped by default (require Redis/Echo).
 
 ### Run all tests (from repo root)
 

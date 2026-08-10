@@ -3,7 +3,9 @@ package paycloudhelper
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 
+	"github.com/PayCloud-ID/paycloudhelper/pcauth"
 	"github.com/PayCloud-ID/paycloudhelper/phhelper"
 
 	"github.com/joho/godotenv"
@@ -73,6 +75,16 @@ func InitializeApp() {
 			LogD("%s .env not found (tried CWD and parents) err=%v", buildLogPrefix("InitializeApp"), err)
 		}
 	}
+
+	pcauth.ConfigureCostProvider(func() int {
+		bcryptCost := pcauth.DefaultCost
+		if rawCost := os.Getenv("BCRYPT_COST"); rawCost != "" {
+			if parsedCost, err := strconv.Atoi(rawCost); err == nil {
+				bcryptCost = parsedCost
+			}
+		}
+		return bcryptCost
+	})
 
 	if appName := os.Getenv("APP_NAME"); appName != "" {
 		phhelper.SetAppName(appName)

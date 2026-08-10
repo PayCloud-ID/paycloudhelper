@@ -47,6 +47,7 @@ captures and Postman collections for the **whole PayCloud platform** live in the
 | `phsentry/` | Sentry error tracking |
 | `phaudittrailv0/` | Legacy v0 audit trail |
 | `phjson/` | Sonic-based JSON wrapper for consumer opt-in performance |
+| `pcauth/` | Canonical UUID-salted bcrypt password hashing and transparent cost upgrades |
 | `sdk/services/` | Service-scoped SDK layout for shared service clients and proto snapshots |
 | `sdk/shared/` | Shared runtime helpers for transport, observability, and error normalization |
 
@@ -188,6 +189,17 @@ StoreRedisWithLock(key, value, duration)                    // atomic
 AcquireLockWithRetry(key, ttl, retries, delay)             // distributed lock
 ReleaseLockWithRetry(mutex, retries)                       // release
 ```
+
+### Password Hashing (`pcauth`)
+
+```go
+salt, hash, err := pcauth.GenerateHashAndSalt(plaintext)
+result, err := pcauth.VerifyAndMaybeRehash(plaintext, salt, hash)
+```
+
+The deployed scheme is bcrypt over `plaintext + UUID salt`. `DefaultCost` is 10;
+`BCRYPT_COST` is loaded by `InitializeApp()` and constrained to bcrypt's minimum cost through 14.
+Persist `VerificationResult.NewSalt` and `NewHash` together when `NeedsRehash` is true.
 
 ### Audit Trail (V1 + V2)
 

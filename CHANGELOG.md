@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`pcauth`**: canonical UUID-salted bcrypt password hashing via
+  `GenerateHashAndSalt`, plus `VerifyAndMaybeRehash` for transparent upgrades of
+  hashes below the configured cost. The default cost is 10; `BCRYPT_COST` is
+  constrained to bcrypt's minimum cost through 14. This additive public package
+  is intended for the `v1.12.0` minor release.
+
 ## [v1.11.1] - 2026-08-03
 
 ### Changed
