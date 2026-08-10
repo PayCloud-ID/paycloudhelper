@@ -9,13 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.12.0] - 2026-08-10
+
 ### Added
 
 - **`pcauth`**: canonical UUID-salted bcrypt password hashing via
   `GenerateHashAndSalt`, plus `VerifyAndMaybeRehash` for transparent upgrades of
   hashes below the configured cost. The default cost is 10; `BCRYPT_COST` is
-  constrained to bcrypt's minimum cost through 14. This additive public package
-  is intended for the `v1.12.0` minor release.
+  constrained to bcrypt's minimum cost through 14.
 
 ## [v1.11.1] - 2026-08-03
 
@@ -383,6 +384,7 @@ History before this changelog was introduced. See git tags and release notes for
 
 Retracted versions (do not use): v1.6.3, v1.6.0, v1.5.2 — see `go.mod` retract block.
 
+[v1.12.0]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.11.1..v1.12.0
 [v1.8.2]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.8.1..v1.8.2
 [v1.8.1]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.8.0-beta.2..v1.8.1
 [v1.8.0-beta.2]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.7.1-beta.1..v1.8.0-beta.2
