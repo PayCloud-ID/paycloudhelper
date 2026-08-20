@@ -1,0 +1,136 @@
+name: Cleanup Merged Branches
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: Production branch used as merge target for ancestry checks
+        required: true
+        default: main
+        type: choice
+        options:
+          - master
+          - main
+      dry_run:
+        description: Preview candidates only without deleting branches
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cleanup-merged-branches-${{ github.event_name == 'workflow_dispatch' && inputs.target_branch || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  cleanup-merged-branches:
+    name: Delete Branches Merged Into Production Branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Validate target branch is production-only
+        env:
+          TARGET_BRANCH: ${{ github.event_name == 'workflow_dispatch' && inputs.target_branch || github.ref_name }}
+        run: |
+          set -euo pipefail
+          case "${TARGET_BRANCH}" in
+            master|main) echo "OK: target_branch=${TARGET_BRANCH}" ;;
+            *)
+              echo "ERROR: refusing to run cleanup with target_branch='${TARGET_BRANCH}'"
+              echo "Cleanup is only allowed against production branches (master, main)."
+              exit 1
+              ;;
+          esac
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git identity
+        run: |
+          git config --global user.email "pipeline@github.actions"
+          git config --global user.name "GitHub Actions"
+
+      - name: Cleanup merged branches
+        shell: bash
+        env:
+          PROTECTED_BRANCHES: "master main dev develop staging"
+          TARGET_BRANCH: ${{ github.event_name == 'workflow_dispatch' && inputs.target_branch || github.ref_name }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+        run: |
+          set -euo pipefail
+
+          if [ "${DRY_RUN}" = "true" ]; then
+            echo "Dry run mode enabled. No branches will be deleted."
+          fi
+
+          git fetch origin --prune
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*' --prune
+
+          git checkout "${TARGET_BRANCH}"
+          git pull --ff-only origin "${TARGET_BRANCH}"
+
+          : > branches_to_delete.txt
+
+          git for-each-ref --format='%(refname:short)' refs/remotes/origin | \
+            grep -v 'origin/HEAD' | \
+            sed 's|origin/||' | \
+            while read -r branch; do
+              [ "${branch}" = "${TARGET_BRANCH}" ] && continue
+
+              if git show-ref --verify --quiet "refs/remotes/origin/${branch}"; then
+                if git merge-base --is-ancestor "origin/${branch}" "${TARGET_BRANCH}" 2>/dev/null; then
+                  is_protected=false
+                  for protected in ${PROTECTED_BRANCHES}; do
+                    if [ "${branch}" = "${protected}" ]; then
+                      echo "PROTECTED: ${branch} (skipping)"
+                      is_protected=true
+                      break
+                    fi
+                  done
+                  if [ "${is_protected}" = "false" ]; then
+                    echo "MERGED: ${branch} (will delete)"
+                    echo "${branch}" >> branches_to_delete.txt
+                  fi
+                else
+                  echo "NOT MERGED: ${branch} (keeping)"
+                fi
+              fi
+            done
+
+          if [ -s branches_to_delete.txt ]; then
+            deleted=0
+            failed=0
+            while IFS= read -r branch; do
+              if [ -n "${branch}" ]; then
+                if [ "${DRY_RUN}" = "true" ]; then
+                  echo "  Dry run: would delete ${branch}"
+                elif git push origin --delete "${branch}" 2>/dev/null; then
+                  echo "  Deleted: ${branch}"
+                  deleted=$((deleted + 1))
+                else
+                  echo "  Failed: ${branch}"
+                  failed=$((failed + 1))
+                fi
+              fi
+            done < branches_to_delete.txt
+            if [ "${DRY_RUN}" = "true" ]; then
+              echo "Results: dry run completed, no branches deleted"
+            else
+              echo "Results: ${deleted} deleted, ${failed} failed"
+            fi
+          else
+            echo "No merged branches to delete"
+          fi
+
+      - name: Cleanup temporary file
+        if: always()
+        run: rm -f branches_to_delete.txt 2>/dev/null || true
