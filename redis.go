@@ -30,16 +30,17 @@ var (
 	DefaultRedisTimeout                          = 1000 * time.Millisecond
 	redisPoolClient                              atomic.Pointer[redis.Client] // atomic load/store; serialized writes via redisReconnectMu
 	redisReconnectMu                             sync.Mutex                   // serializes lazy reconnects in GetRedisPoolClient
+	redisOptionsMu                               sync.RWMutex                 // guards redisOptions, the *Mem vars and effectiveRedisTimeout
 	redisHostMem, redisPortMem, redisPasswordMem *string
 	redisDbMem                                   *int
 	redisOptions                                 *redis.Options
+	effectiveRedisTimeout                        time.Duration // set by InitRedisOptions; read via redisTimeout()
 	redisSync                                    *redsync.Redsync
 	redisSyncInitOnce                            sync.Once
 	redisSyncInitErr                             error
 	redisDefaultDuration                         = 300 * time.Second
 	redisLockKey                                 = "redis_lock:" // Default Redis lock key prefix
 )
-
 
 // LockError represents a distributed lock operation error with context
 type LockError struct {
@@ -127,7 +128,10 @@ func InitializeRedis(opt redis.Options) {
 }
 
 func GetRedisPoolClient() (*redis.Client, error) {
-	if redisOptions == nil {
+	// Read the options pointer once under the config lock; never hold both
+	// redisOptionsMu and redisReconnectMu at the same time.
+	opts := GetRedisOptions()
+	if opts == nil {
 		return nil, errors.New("nil redis options")
 	}
 	// Fast path: client already alive.
@@ -140,13 +144,19 @@ func GetRedisPoolClient() (*redis.Client, error) {
 	if c := redisPoolClient.Load(); c != nil { // double-check after acquiring lock
 		return c, nil
 	}
-	if err := initRedisClient(redisOptions); err != nil {
+	if err := initRedisClient(opts); err != nil {
 		return nil, err
 	}
 	return redisPoolClient.Load(), nil
 }
 
 func InitRedisOptions(rawOpt redis.Options) *redis.Options {
+	// One write lock for the whole body: this function both reads (*redisHostMem)
+	// and writes the configuration globals, so narrowing the critical section
+	// would reintroduce the PA-293 race.
+	redisOptionsMu.Lock()
+	defer redisOptionsMu.Unlock()
+
 	ro := &rawOpt
 
 	if h, p, err := net.SplitHostPort(rawOpt.Addr); err == nil {
@@ -184,10 +194,12 @@ func InitRedisOptions(rawOpt redis.Options) *redis.Options {
 	}
 	redisOptions = ro
 
-	// Set custom timeout if provided
+	// Set custom timeout if provided. This derives effectiveRedisTimeout rather
+	// than mutating the exported DefaultRedisTimeout, which is read from many
+	// goroutines and cannot be written safely (PA-293).
 	if redisOptions.ReadTimeout > 0 {
-		DefaultRedisTimeout = redisOptions.ReadTimeout + DefaultRedisTimeout
-		LogI("%s custom redis timeout set=%v", buildLogPrefix("InitRedisOptions"), DefaultRedisTimeout)
+		effectiveRedisTimeout = redisOptions.ReadTimeout + DefaultRedisTimeout
+		LogI("%s custom redis timeout set=%v", buildLogPrefix("InitRedisOptions"), effectiveRedisTimeout)
 	}
 
 	return redisOptions
@@ -218,7 +230,21 @@ func InitRedSyncOnce() error {
 }
 
 func GetRedisOptions() *redis.Options {
+	redisOptionsMu.RLock()
+	defer redisOptionsMu.RUnlock()
 	return redisOptions
+}
+
+// redisTimeout returns the effective Redis operation timeout. InitRedisOptions
+// derives it from the configured ReadTimeout; until then the package default
+// applies. Reads are guarded because InitRedisOptions can run concurrently.
+func redisTimeout() time.Duration {
+	redisOptionsMu.RLock()
+	defer redisOptionsMu.RUnlock()
+	if effectiveRedisTimeout > 0 {
+		return effectiveRedisTimeout
+	}
+	return DefaultRedisTimeout
 }
 
 // InitRedisFromEnv initializes Redis from standard environment variables.
@@ -294,7 +320,7 @@ func initRedisClient(opt *redis.Options) error {
 
 	c := redis.NewClient(opt)
 
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), redisTimeout())
 	defer cancel()
 
 	res, err := c.Ping(ctx).Result()
@@ -375,7 +401,7 @@ func StoreRedisWithContext(ctx context.Context, id string, data interface{}, dur
 	}
 
 	// Use provided context with additional timeout as safety net
-	timeoutCtx, cancel := context.WithTimeout(ctx, DefaultRedisTimeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, redisTimeout())
 	defer cancel()
 
 	return rClient.Set(timeoutCtx, id, jsonData, clampStoreTTL(id, duration)).Err()
@@ -399,7 +425,7 @@ func StoreRedisNoExpiry(id string, data interface{}) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), redisTimeout())
 	defer cancel()
 
 	return rClient.Set(ctx, id, jsonData, 0).Err()
@@ -444,7 +470,7 @@ func GetRedisWithContext(ctx context.Context, id string) (string, error) {
 	}
 
 	// Use provided context with additional timeout as safety net
-	timeoutCtx, cancel := context.WithTimeout(ctx, DefaultRedisTimeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, redisTimeout())
 	defer cancel()
 
 	getRedis := rClient.Get(timeoutCtx, id)
@@ -473,7 +499,7 @@ func DeleteRedisWithContext(ctx context.Context, id string) error {
 	}
 
 	// Use provided context with additional timeout as safety net
-	timeoutCtx, cancel := context.WithTimeout(ctx, DefaultRedisTimeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, redisTimeout())
 	defer cancel()
 
 	res := rClient.Del(timeoutCtx, id)
@@ -510,7 +536,7 @@ func AcquireLock(key string, ttl time.Duration) (bool, error) {
 	)
 
 	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), redisTimeout())
 	defer cancel()
 
 	// Try to obtain the lock
@@ -550,7 +576,7 @@ func ReleaseLock(key string) error {
 	}
 
 	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), redisTimeout())
 	defer cancel()
 
 	ok, err := mutex.UnlockContext(ctx)
@@ -604,7 +630,7 @@ func AcquireLockWithRetry(key string, ttl time.Duration, maxRetries int, retryDe
 	)
 
 	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), redisTimeout())
 	defer cancel()
 
 	// Try to obtain the lock
@@ -633,7 +659,7 @@ func ReleaseLockWithRetry(mutex *redsync.Mutex, maxRetries int) error {
 	backoff := GetTrxRedisBackoff()
 	var err error
 	for i := 0; i < maxRetries; i++ {
-		ctx, cancel := context.WithTimeout(context.Background(), DefaultRedisTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), redisTimeout())
 		ok, unlockErr := mutex.UnlockContext(ctx)
 		cancel()
 
@@ -656,10 +682,10 @@ func ReleaseLockWithRetry(mutex *redsync.Mutex, maxRetries int) error {
 // Reading os.Getenv on every lock acquire/release is a per-call syscall; caching
 // eliminates that cost without restricting when the .env file must be loaded.
 var (
-	backoffOnce        sync.Once
-	cachedBackoff      int
-	lockTimeoutOnce    sync.Once
-	cachedLockTimeout  time.Duration
+	backoffOnce       sync.Once
+	cachedBackoff     int
+	lockTimeoutOnce   sync.Once
+	cachedLockTimeout time.Duration
 )
 
 // GetTrxRedisBackoff returns the retry backoff in milliseconds for distributed lock
@@ -698,7 +724,10 @@ func resetRedisClientStateForTesting() {
 	redisSync = nil
 	redisSyncInitOnce = sync.Once{}
 	redisSyncInitErr = nil
+	redisOptionsMu.Lock()
 	redisOptions = nil
+	effectiveRedisTimeout = 0
+	redisOptionsMu.Unlock()
 	// Reset cached env values so tests that manipulate env vars see fresh reads.
 	backoffOnce = sync.Once{}
 	cachedBackoff = 0

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"dario.cat/mergo"
 	"github.com/PayCloud-ID/paycloudhelper/phhelper"
 	"github.com/PayCloud-ID/paycloudhelper/phlogger"
-	"dario.cat/mergo"
 	"github.com/getsentry/sentry-go"
 )
 
