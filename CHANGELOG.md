@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.12.1] - 2026-09-03
+
+### Fixed
+
+- **`redis`**: guard the package-level Redis configuration globals against concurrent
+  initialisation. `InitRedisOptions` wrote `redisOptions`, the four `*Mem` vars and the
+  exported `DefaultRedisTimeout` with no synchronisation, while `GetRedisPoolClient` and
+  `GetRedisOptions` read them from other goroutines — a genuine data race under
+  `go test -race`, present in **every** released tag up to and including `v1.12.0`. The
+  sibling `redisPoolClient` was hardened in `v1.10.2`; the configuration set beside it was
+  missed. A new `redisOptionsMu` now covers them.
+
+### Changed
+
+- **`redis`**: `InitRedisOptions` no longer mutates the exported `DefaultRedisTimeout`. It is
+  read from many goroutines and cannot be written safely. The derived value (`ReadTimeout` +
+  baseline) now lives in an internal `effectiveRedisTimeout`. **Observable behaviour is
+  unchanged** — Redis operations still use baseline + `ReadTimeout` — and `DefaultRedisTimeout`
+  remains exported and readable as the immutable baseline. Only callers that *wrote* to it, or
+  read it back expecting the accumulated value, are affected; no repo in the fleet does either.
+
 ## [v1.12.0] - 2026-08-10
 
 ### Added
