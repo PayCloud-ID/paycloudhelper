@@ -3,8 +3,10 @@ package paycloudhelper
 import (
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/go-redsync/redsync/v4"
+	"github.com/redis/go-redis/v9"
 )
 
 // TestInitRedSyncOnce_concurrent verifies that concurrent calls to InitRedSyncOnce are
@@ -70,4 +72,36 @@ func TestInitRedSyncOnce_idempotent(t *testing.T) {
 	if redisSync == nil {
 		t.Fatal("redisSync is nil after InitRedSyncOnce")
 	}
+}
+
+// TestInitRedisOptions_concurrent reproduces PA-293: InitRedisOptions writes the
+// package-level Redis configuration globals while GetRedisOptions and
+// GetRedisPoolClient read them, with no synchronisation between the two. The
+// dialing failures are irrelevant here — the assertion is the absence of a race.
+// Run with go test -race.
+func TestInitRedisOptions_concurrent(t *testing.T) {
+	resetRedisClientStateForTesting()
+	t.Cleanup(resetRedisClientStateForTesting)
+
+	const goroutines = 16
+	var wg sync.WaitGroup
+
+	for i := 0; i < goroutines; i++ {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			// A short DialTimeout keeps the unreachable-port path fast; the
+			// test is about the config globals, not connectivity.
+			InitRedisOptions(redis.Options{
+				Addr:        "127.0.0.1:63799",
+				DialTimeout: 20 * time.Millisecond,
+			})
+		}()
+		go func() {
+			defer wg.Done()
+			_ = GetRedisOptions()
+			_, _ = GetRedisPoolClient()
+		}()
+	}
+	wg.Wait()
 }
