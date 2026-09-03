@@ -105,3 +105,36 @@ func TestInitRedisOptions_concurrent(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// TestInitializeRedisWithRetry_concurrent is the regression guard for the gap
+// v1.12.1 missed: InitializeRedisWithRetry writes redisLockKey *outside*
+// InitRedisOptions, so the v1.12.1 mutex did not cover it, while lock
+// acquisition reads it. v1.12.1's own test suite did not exercise
+// InitializeRedisWithRetry concurrently, which is why it shipped.
+// Run with go test -race.
+func TestInitializeRedisWithRetry_concurrent(t *testing.T) {
+	resetRedisClientStateForTesting()
+	t.Cleanup(resetRedisClientStateForTesting)
+
+	const goroutines = 8
+	var wg sync.WaitGroup
+	wg.Add(goroutines * 2)
+
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			_ = InitializeRedisWithRetry(RedisInitOptions{
+				Options:    redis.Options{Addr: "127.0.0.1:63799", DialTimeout: 20 * time.Millisecond},
+				MaxRetries: 1,
+				RetryDelay: time.Millisecond,
+				FailFast:   true,
+			})
+		}()
+		go func() {
+			defer wg.Done()
+			_ = getRedisLockKey()
+			_ = GetRedisOptions()
+		}()
+	}
+	wg.Wait()
+}

@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.12.2] - 2026-09-03
+
+### Fixed
+
+- **`redis`**: complete the `v1.12.1` fix. That release guarded the globals written by
+  `InitRedisOptions`, but **missed `redisLockKey`**, which `InitializeRedisWithRetry` writes one
+  frame higher — outside `InitRedisOptions` and therefore outside the new mutex — while
+  `StoreRedisWithLock` reads it during lock acquisition. Reproduced as a write/write race under
+  `go test -race` by concurrent `InitializeRedisWithRetry` callers. Now written and read through
+  `setRedisLockKey`/`getRedisLockKey` under the same `redisOptionsMu`.
+  **Anyone on `v1.12.1` should move to `v1.12.2`** — `v1.12.1` closes the larger hole but not this one.
+  Added `TestInitializeRedisWithRetry_concurrent` as the regression guard; `v1.12.1` shipped because
+  its suite never exercised `InitializeRedisWithRetry` concurrently.
+
 ## [v1.12.1] - 2026-09-03
 
 ### Fixed

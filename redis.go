@@ -39,7 +39,7 @@ var (
 	redisSyncInitOnce                            sync.Once
 	redisSyncInitErr                             error
 	redisDefaultDuration                         = 300 * time.Second
-	redisLockKey                                 = "redis_lock:" // Default Redis lock key prefix
+	redisLockKey                                 = "redis_lock:" // Default Redis lock key prefix; guarded by redisOptionsMu
 )
 
 // LockError represents a distributed lock operation error with context
@@ -82,7 +82,7 @@ func InitializeRedisWithRetry(opts RedisInitOptions) error {
 
 	LogI("%s starting retry logic max_retries=%d base_delay=%v", buildLogPrefix("InitializeRedisWithRetry"), opts.MaxRetries, opts.RetryDelay)
 
-	redisLockKey = fmt.Sprintf("redis_lock:%s:", GetAppName())
+	setRedisLockKey(fmt.Sprintf("redis_lock:%s:", GetAppName()))
 
 	// Initialize Redis options with default values
 	InitRedisOptions(opts.Options)
@@ -233,6 +233,23 @@ func GetRedisOptions() *redis.Options {
 	redisOptionsMu.RLock()
 	defer redisOptionsMu.RUnlock()
 	return redisOptions
+}
+
+// setRedisLockKey stores the distributed-lock key prefix. Written by
+// InitializeRedisWithRetry, which can run concurrently with lock acquisition
+// on the post-outage reconnect path, so it takes the same lock as the rest of
+// the Redis configuration set.
+func setRedisLockKey(k string) {
+	redisOptionsMu.Lock()
+	defer redisOptionsMu.Unlock()
+	redisLockKey = k
+}
+
+// getRedisLockKey returns the distributed-lock key prefix under the config lock.
+func getRedisLockKey() string {
+	redisOptionsMu.RLock()
+	defer redisOptionsMu.RUnlock()
+	return redisLockKey
 }
 
 // redisTimeout returns the effective Redis operation timeout. InitRedisOptions
@@ -433,7 +450,7 @@ func StoreRedisNoExpiry(id string, data interface{}) error {
 
 func StoreRedisWithLock(id string, data interface{}, duration time.Duration) (err error) {
 	// Redis Lock
-	lockKey := redisLockKey + id
+	lockKey := getRedisLockKey() + id
 	lockTTL := GetTrxRedisLockTimeout()
 	LogI("%s lock_ttl=%s lock_key=%s", buildLogPrefix("StoreRedisWithLock"), lockTTL, lockKey)
 
@@ -727,6 +744,7 @@ func resetRedisClientStateForTesting() {
 	redisOptionsMu.Lock()
 	redisOptions = nil
 	effectiveRedisTimeout = 0
+	redisLockKey = "redis_lock:"
 	redisOptionsMu.Unlock()
 	// Reset cached env values so tests that manipulate env vars see fresh reads.
 	backoffOnce = sync.Once{}
