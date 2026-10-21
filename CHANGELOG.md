@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`logger`**: the global log sampler was never active in services. The package `init()` runs
+  `InitializeLogger()` (which builds the sampler from `APP_ENV`) before `InitializeApp()` (which is
+  what sets the app env), so the sampler was always built with an empty env and came out disabled.
+  `InitializeApp()` now rebuilds it once (`sync.Once`) right after the env is set. Public API is
+  unchanged; an explicit `InitializeSampler(...)` by the service afterwards still wins.
+  **Behaviour change on adoption:** with `APP_ENV` = production / staging / develop, identical
+  format-string log lines are now sampled (production 5 then every 50th, staging 10 then every 10th,
+  develop 20 then every 20th, per second), with a `[+N suppressed]` suffix. Check alerts and
+  dashboards that count every occurrence of a hot log line before bumping.
+
 ## [v1.12.2] - 2026-09-03
 
 ### Fixed

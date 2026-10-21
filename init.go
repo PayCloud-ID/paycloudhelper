@@ -4,12 +4,18 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 
 	"github.com/PayCloud-ID/paycloudhelper/pcauth"
 	"github.com/PayCloud-ID/paycloudhelper/phhelper"
 
 	"github.com/joho/godotenv"
 )
+
+// samplerInitOnce makes sure the env-derived sampler default is applied exactly
+// once, after APP_ENV is known. Later InitializeApp calls (public API) leave a
+// service's own InitializeSampler choice alone.
+var samplerInitOnce sync.Once
 
 func init() {
 	AddValidatorLibs()
@@ -95,6 +101,12 @@ func InitializeApp() {
 	} else if appMode := os.Getenv("APP_MODE"); appMode != "" {
 		phhelper.SetAppEnv(appMode)
 	}
+
+	// InitializeLogger (run first by init()) builds the sampler before APP_ENV is
+	// set, so it comes out disabled. Rebuild it now that the env is known.
+	samplerInitOnce.Do(func() {
+		InitializeSampler(SamplerConfigFromAppEnv())
+	})
 
 	// Validate configuration and log warnings
 	LogConfigurationWarnings()
