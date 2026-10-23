@@ -9,7 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.14.0] - 2026-10-23
+
+### Added
+
+- **`phtrace`**: export headers for the OTLP trace and metric exporters, so a service can send
+  the collector's ingestion key (for example `authorization`). Loaded from
+  `OTEL_EXPORTER_OTLP_HEADERS` (`key=value,…`, values percent-encoded as in the OpenTelemetry
+  spec) or set with `WithHeader`. A malformed value makes `Init` return an error and start no
+  exporter; errors name the entry and the problem, never the value. Load the key from a secret.
+- **`phtrace`**: `Config.CACertFile` / `WithCACertFile` / `OTEL_EXPORTER_OTLP_CERTIFICATE`, a PEM
+  CA bundle trusted for the collector certificate when `Insecure` is false (system roots when empty).
+
 ### Fixed
+
+- **`phtrace`**: TLS was impossible. Any positive `DialTimeout` (the default is 5 s) added
+  `grpc.WithTransportCredentials(insecure.NewCredentials())` to the trace exporter, so
+  `OTEL_EXPORTER_OTLP_INSECURE=false` still dialled in plaintext and could not reach a TLS
+  collector. Transport credentials are now decided in one place: plaintext only when `Insecure` is
+  set, TLS 1.2+ otherwise, for both traces and metrics. `DialTimeout` only bounds the dial context.
+  Proven with an in-process TLS collector that requires the ingestion key (success, missing key,
+  untrusted certificate).
 
 - **`logger`**: the global log sampler was never active in services. The package `init()` runs
   `InitializeLogger()` (which builds the sampler from `APP_ENV`) before `InitializeApp()` (which is
