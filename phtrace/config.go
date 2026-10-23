@@ -1,7 +1,11 @@
 package phtrace
 
 import (
+	"errors"
+	"fmt"
+	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -40,6 +44,22 @@ type Config struct {
 	// dev / in-cluster where the collector is an internal service.
 	// Env: OTEL_EXPORTER_OTLP_INSECURE (default true).
 	Insecure bool
+
+	// CACertFile is a PEM file of CA certificates trusted for the collector's
+	// TLS certificate when Insecure is false. Empty uses the system roots.
+	// Env: OTEL_EXPORTER_OTLP_CERTIFICATE.
+	CACertFile string
+
+	// Headers are sent as gRPC metadata on every trace and metric export, e.g.
+	// the collector's ingestion key as `authorization`. Load the value from a
+	// secret; it is never logged or included in an error.
+	// Env: OTEL_EXPORTER_OTLP_HEADERS (comma-separated key=value, values
+	// percent-encoded as in the OpenTelemetry specification).
+	Headers map[string]string
+
+	// headersErr records a malformed OTEL_EXPORTER_OTLP_HEADERS so Init can
+	// refuse to start the exporters instead of exporting without the key.
+	headersErr error
 
 	// SamplingRatio is the head-based sampling ratio for traces (0..1). 1.0
 	// captures everything, 0.05 captures 5%. Parent-based sampling is applied
@@ -91,6 +111,20 @@ func WithInsecure(v bool) Option { return func(c *Config) { c.Insecure = v } }
 // WithSamplingRatio sets Config.SamplingRatio (clamped to [0,1] at Init).
 func WithSamplingRatio(v float64) Option { return func(c *Config) { c.SamplingRatio = v } }
 
+// WithCACertFile sets Config.CACertFile.
+func WithCACertFile(v string) Option { return func(c *Config) { c.CACertFile = v } }
+
+// WithHeader adds or replaces one export header; the key is lower-cased as
+// gRPC metadata requires.
+func WithHeader(k, v string) Option {
+	return func(c *Config) {
+		if c.Headers == nil {
+			c.Headers = map[string]string{}
+		}
+		c.Headers[strings.ToLower(strings.TrimSpace(k))] = v
+	}
+}
+
 // WithEnabled sets Config.Enabled explicitly.
 func WithEnabled(v bool) Option { return func(c *Config) { c.Enabled = v } }
 
@@ -115,6 +149,7 @@ func FromEnv(opts ...Option) Config {
 		Environment:          firstNonEmpty(os.Getenv("OTEL_DEPLOYMENT_ENV"), os.Getenv("APP_ENV"), "dev"),
 		Endpoint:             strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")),
 		Insecure:             envBool("OTEL_EXPORTER_OTLP_INSECURE", true),
+		CACertFile:           strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_CERTIFICATE")),
 		SamplingRatio:        envFloat("OTEL_TRACES_SAMPLER_ARG", 1.0),
 		DialTimeout:          envDuration("OTEL_DIAL_TIMEOUT", 5*time.Second),
 		BatchTimeout:         envDuration("OTEL_BATCH_TIMEOUT", 5*time.Second),
@@ -122,6 +157,7 @@ func FromEnv(opts ...Option) Config {
 		MetricExportInterval: envDuration("OTEL_METRIC_EXPORT_INTERVAL", 15*time.Second),
 		ResourceAttributes:   parseResourceAttrs(os.Getenv("OTEL_RESOURCE_ATTRIBUTES")),
 	}
+	c.Headers, c.headersErr = parseOTLPHeaders(os.Getenv("OTEL_EXPORTER_OTLP_HEADERS"))
 	// Default: enabled iff endpoint is set. OTEL_ENABLED overrides.
 	if v := strings.TrimSpace(os.Getenv("OTEL_ENABLED")); v != "" {
 		c.Enabled = truthy(v)
@@ -236,4 +272,56 @@ func parseResourceAttrs(raw string) map[string]string {
 		}
 	}
 	return out
+}
+
+// headerKey is a gRPC metadata key: lower-case token characters only.
+var headerKey = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
+
+// parseOTLPHeaders parses OTEL_EXPORTER_OTLP_HEADERS. Errors name the entry
+// position and the problem, never the value, because the value is a secret.
+func parseOTLPHeaders(raw string) (map[string]string, error) {
+	out := map[string]string{}
+	if strings.TrimSpace(raw) == "" {
+		return out, nil
+	}
+	for i, entry := range strings.Split(raw, ",") {
+		pos := i + 1
+		key, value, ok := strings.Cut(entry, "=")
+		key = strings.ToLower(strings.TrimSpace(key))
+		value = strings.TrimSpace(value)
+		switch {
+		case !ok:
+			return nil, fmt.Errorf("OTEL_EXPORTER_OTLP_HEADERS entry %d has no '='", pos)
+		case !headerKey.MatchString(key):
+			return nil, fmt.Errorf("OTEL_EXPORTER_OTLP_HEADERS entry %d has an invalid key", pos)
+		case value == "":
+			return nil, fmt.Errorf("OTEL_EXPORTER_OTLP_HEADERS entry %d (%s) has an empty value", pos, key)
+		}
+		decoded, err := url.PathUnescape(value)
+		if err != nil {
+			return nil, fmt.Errorf("OTEL_EXPORTER_OTLP_HEADERS entry %d (%s) has invalid percent-encoding", pos, key)
+		}
+		if strings.ContainsFunc(decoded, func(r rune) bool { return r < 0x20 || r == 0x7f }) {
+			return nil, fmt.Errorf("OTEL_EXPORTER_OTLP_HEADERS entry %d (%s) contains a control character", pos, key)
+		}
+		if _, dup := out[key]; dup {
+			return nil, fmt.Errorf("OTEL_EXPORTER_OTLP_HEADERS entry %d repeats key %s", pos, key)
+		}
+		out[key] = decoded
+	}
+	return out, nil
+}
+
+// validateHeaders checks headers set in code (WithHeader / a hand-built
+// Config) with the same rules as the env loader.
+func validateHeaders(headers map[string]string) error {
+	for key, value := range headers {
+		if !headerKey.MatchString(key) {
+			return errors.New("phtrace: Config.Headers has an invalid key")
+		}
+		if value == "" || strings.ContainsFunc(value, func(r rune) bool { return r < 0x20 || r == 0x7f }) {
+			return fmt.Errorf("phtrace: Config.Headers[%s] is empty or contains a control character", key)
+		}
+	}
+	return nil
 }
