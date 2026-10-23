@@ -128,7 +128,7 @@ func LogAudittrailData(funcName, desc, source, commType string, key *[]string, d
 // logAuditErrorWithSentry logs error and optionally sends to Sentry if initialized
 // This is a backward-compatible helper that safely checks for Sentry client
 func logAuditErrorWithSentry(msg string, err error) {
-	LogE(msg)
+	LogE("%s", msg)
 
 	// Only send to Sentry if client is initialized (backward compatible)
 	if GetSentryClient() != nil {

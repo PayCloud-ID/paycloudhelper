@@ -37,16 +37,30 @@ func emitE(format string, args ...interface{}) {
 	fireHooks("error", fmt.Sprintf(format, args...))
 }
 
-func emitF(format string, args ...interface{}) {
-	// Hooks fire BEFORE Fatalf because Fatalf calls os.Exit.
-	fireHooks("fatal", fmt.Sprintf(format, args...))
+// fatalHandler is the function that performs the final fatal log write and
+// process termination. It is a package-level variable so tests can replace it
+// with a no-op to prevent os.Exit without changing production behaviour.
+var fatalHandler func(string, ...interface{}) = func(format string, args ...interface{}) {
 	Log.Fatalf(format, args...)
 }
 
-// ── Public log functions (sampled by default) ────────────────────────────────
-// Each public function rate-limits using the format string as key via the
+func emitF(format string, args ...interface{}) {
+	// Hooks fire BEFORE fatalHandler because Log.Fatalf calls os.Exit.
+	fireHooks("fatal", fmt.Sprintf(format, args...))
+	fatalHandler(format, args...)
+}
+
+// ── Public log functions ──────────────────────────────────────────────────────
+// Debug, Info, and Warn are rate-limited using the format string as key via the
 // global sampler. In production: first 5 per second per key, then every 50th.
 // In dev: no sampling. Configurable via InitializeSampler() or APP_ENV.
+//
+// Error and Fatal are NEVER sampled:
+//   - A sampled LogE would silently drop error lines and skip fireHooks("error"),
+//     causing Sentry/log-forwarding hooks to miss per-transaction detail (ref_no).
+//   - A sampled LogF would return WITHOUT calling os.Exit, letting the process
+//     continue after a fatal condition — a critical safety violation for payment
+//     services.
 
 // LogD logs at Debug level.
 func LogD(format string, args ...interface{}) {
@@ -87,30 +101,19 @@ func LogW(format string, args ...interface{}) {
 	emitW(format, args...)
 }
 
-// LogE logs at Error level.
+// LogE logs at Error level. Never sampled — all errors must reach hooks and
+// log-forwarding/Sentry backends regardless of burst volume. Sampling would
+// silently drop per-transaction error detail (ref_no, merchant_id) during
+// bursts and skip fireHooks("error"), breaking Sentry/log-forwarding.
 func LogE(format string, args ...interface{}) {
-	allowed, suppressed := globalSampler.check(format)
-	if !allowed {
-		return
-	}
-	if suppressed > 0 {
-		format += " [+%d suppressed]"
-		args = append(args, suppressed)
-	}
 	emitE(format, args...)
 }
 
-// LogF logs at Fatal level. Sampled by format string key.
+// LogF logs at Fatal level. Never sampled — a LogF that does not reach
+// os.Exit is a critical safety violation: the process would continue executing
+// after a condition the caller declared unrecoverable.
 // Hooks fire synchronously before os.Exit.
 func LogF(format string, args ...interface{}) {
-	allowed, suppressed := globalSampler.check(format)
-	if !allowed {
-		return
-	}
-	if suppressed > 0 {
-		format += " [+%d suppressed]"
-		args = append(args, suppressed)
-	}
 	emitF(format, args...)
 }
 
