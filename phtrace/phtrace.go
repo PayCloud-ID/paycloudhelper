@@ -22,8 +22,11 @@ package phtrace
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,7 +44,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
-	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -215,16 +218,16 @@ func buildResource(ctx context.Context, cfg Config) (*resource.Resource, error) 
 }
 
 func buildTracerProvider(ctx context.Context, cfg Config, res *resource.Resource) (*sdktrace.TracerProvider, *otlptrace.Exporter, error) {
+	creds, err := transportCredentials(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
 	opts := []otlptracegrpc.Option{
 		otlptracegrpc.WithEndpoint(cfg.Endpoint),
+		otlptracegrpc.WithTLSCredentials(creds),
 	}
-	if cfg.Insecure {
-		opts = append(opts, otlptracegrpc.WithInsecure())
-	}
-	if cfg.DialTimeout > 0 {
-		opts = append(opts, otlptracegrpc.WithDialOption(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		))
+	if len(cfg.Headers) > 0 {
+		opts = append(opts, otlptracegrpc.WithHeaders(cfg.Headers))
 	}
 	dialCtx, cancel := context.WithTimeout(ctx, cfg.DialTimeout)
 	defer cancel()
@@ -246,11 +249,16 @@ func buildTracerProvider(ctx context.Context, cfg Config, res *resource.Resource
 }
 
 func buildMeterProvider(ctx context.Context, cfg Config, res *resource.Resource) (*sdkmetric.MeterProvider, sdkmetric.Exporter, error) {
+	creds, err := transportCredentials(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
 	opts := []otlpmetricgrpc.Option{
 		otlpmetricgrpc.WithEndpoint(cfg.Endpoint),
+		otlpmetricgrpc.WithTLSCredentials(creds),
 	}
-	if cfg.Insecure {
-		opts = append(opts, otlpmetricgrpc.WithInsecure())
+	if len(cfg.Headers) > 0 {
+		opts = append(opts, otlpmetricgrpc.WithHeaders(cfg.Headers))
 	}
 	dialCtx, cancel := context.WithTimeout(ctx, cfg.DialTimeout)
 	defer cancel()
@@ -279,6 +287,12 @@ func ensureRequired(cfg Config) error {
 	}
 	if cfg.DialTimeout <= 0 {
 		return errors.New("phtrace: Config.DialTimeout must be > 0")
+	}
+	if cfg.headersErr != nil {
+		return fmt.Errorf("phtrace: %w", cfg.headersErr)
+	}
+	if err := validateHeaders(cfg.Headers); err != nil {
+		return err
 	}
 	return nil
 }
@@ -349,3 +363,25 @@ func (nopFloat64Gauge) Record(context.Context, float64, ...metric.RecordOption) 
 // ensureTimeNow is used only by tests to make sure the time package is still
 // imported after refactors; regular callers can ignore.
 var ensureTimeNow = time.Now
+
+// transportCredentials is the one place the exporters' transport security is
+// decided: plaintext only when Config.Insecure is set, otherwise TLS against
+// CACertFile or the system roots. DialTimeout bounds the dial context and never
+// changes the credentials.
+func transportCredentials(cfg Config) (credentials.TransportCredentials, error) {
+	if cfg.Insecure {
+		return insecure.NewCredentials(), nil
+	}
+	if cfg.CACertFile == "" {
+		return credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12}), nil
+	}
+	pemBytes, err := os.ReadFile(cfg.CACertFile)
+	if err != nil {
+		return nil, fmt.Errorf("phtrace: read OTLP CA certificate file: %w", err)
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(pemBytes) {
+		return nil, errors.New("phtrace: OTLP CA certificate file holds no PEM certificate")
+	}
+	return credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12, RootCAs: pool}), nil
+}
