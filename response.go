@@ -50,5 +50,5 @@ func LoggerErrorHub(err interface{}, args ...interface{}) {
 	if len(args) > 0 {
 		logData += fmt.Sprintf(" %v ", args[0])
 	}
-	LogE(logData)
+	LogE("%s", logData)
 }

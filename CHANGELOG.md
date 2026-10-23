@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.14.1] - 2026-10-23
+
+### Fixed
+
+- **`phlogger`**: `LogE` and `LogF` are no longer subject to sampling.
+  Two bugs shipped together in `v1.14.0` when `InitializeApp` began applying
+  env-aware `SamplerConfig` after `APP_ENV` is known:
+  1. A sampled `LogE` would silently drop the log line **and** skip
+     `fireHooks("error", …)`, causing Sentry and log-forwarding backends to miss
+     per-transaction error detail (e.g. `ref_no`) during bursts.
+  2. A sampled `LogF` would return from the function **without calling `os.Exit`**,
+     allowing the process to continue executing after a condition the caller declared
+     unrecoverable — a critical safety violation for payment services.
+  `LogD`, `LogI`, and `LogW` remain sampled. `LogERated` / `LogWRated` (explicitly
+  opted-in rate-limited variants) are also unchanged — callers that use them have
+  consciously traded completeness for volume control.
+  A `fatalHandler` variable seam was added to `emitF` so tests can replace
+  `Log.Fatalf` with a no-op and assert that every `LogF` call reaches the
+  exit path without actually terminating the test process.
+
 ## [v1.14.0] - 2026-10-23
 
 ### Added

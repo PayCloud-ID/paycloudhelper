@@ -354,9 +354,9 @@ func TestSampler_DifferentLevels_AreIndependent(t *testing.T) {
 	RegisterLogHook("warn", func(_, _ string) { warn.Add(1) })
 
 	msg := "[TestSampler_DifferentLevels] status update"
-	LogI(msg)
-	LogE(msg)
-	LogW(msg)
+	LogI("%s", msg)
+	LogE("%s", msg)
+	LogW("%s", msg)
 
 	if info.Load() == 0 {
 		t.Error("info hook should have fired")
