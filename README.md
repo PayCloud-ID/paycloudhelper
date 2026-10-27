@@ -505,6 +505,7 @@ e.Use(pch.RevokeToken)     // JWT + Redis revocation check
 - **Purpose:** publish audit trail payloads (v1 and v2 publisher modes).
 - **Connection:** set through `SetUpRabbitMq` or v2 publisher setup APIs.
 - **Key operations:** process/data audit log publishing with retry and backpressure controls.
+- **Cleanup:** auto-connection stop/reset skips absent resources, including repeated stops after incomplete initialization.
 
 ### Sentry
 

@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   allow publishing without a PA key. These additions are Go-only (FT-219 D5);
   the Rust `pc-audit` crate remains PA-only until its first FT producer.
 
+### Fixed
+
+- **RabbitMQ cleanup:** skip absent channels and connections when stopping or
+  resetting an auto-connection. Cleanup after incomplete initialization and
+  repeated stops no longer dereference nil resources.
+
 ## [v1.14.1] - 2026-10-23
 
 ### Fixed
