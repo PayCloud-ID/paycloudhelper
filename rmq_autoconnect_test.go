@@ -68,6 +68,57 @@ func TestRMqAutoConnect_stop_recoversOnNilConnAndChannel(t *testing.T) {
 	r.stop()
 }
 
+func TestRMqAutoConnect_stop_closesOnlyPresentResources(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		channel    *amqp.Channel
+		connection *amqp.Connection
+	}{
+		{name: "uninitialized"},
+		{name: "channel only", channel: &amqp.Channel{}},
+		{name: "connection only", connection: &amqp.Connection{}},
+		{name: "both", channel: &amqp.Channel{}, connection: &amqp.Connection{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			oldChannelClose, oldConnClose := rmqChannelCloseHook, rmqConnCloseHook
+			t.Cleanup(func() {
+				rmqChannelCloseHook, rmqConnCloseHook = oldChannelClose, oldConnClose
+			})
+			var channelCalls, connectionCalls int
+			rmqChannelCloseHook = func(ch *amqp.Channel) error {
+				channelCalls++
+				if ch == nil || ch != tc.channel {
+					t.Errorf("closed channel %p; want present channel %p", ch, tc.channel)
+				}
+				return nil
+			}
+			rmqConnCloseHook = func(conn *amqp.Connection) error {
+				connectionCalls++
+				if conn == nil || conn != tc.connection {
+					t.Errorf("closed connection %p; want present connection %p", conn, tc.connection)
+				}
+				return nil
+			}
+			r := &rMqAutoConnect{ch: tc.channel, conn: tc.connection}
+			r.stop()
+			r.stop()
+			wantChannel, wantConnection := 0, 0
+			if tc.channel != nil {
+				wantChannel = 1
+			}
+			if tc.connection != nil {
+				wantConnection = 1
+			}
+			if channelCalls != wantChannel || connectionCalls != wantConnection {
+				t.Errorf("close calls: channel=%d connection=%d; want %d/%d", channelCalls, connectionCalls, wantChannel, wantConnection)
+			}
+			if r.ch != nil || r.conn != nil {
+				t.Fatal("stopped resources were not cleared")
+			}
+		})
+	}
+}
+
 func TestRMqAutoConnect_connect_exercisesBackoffBranches(t *testing.T) {
 	r := &rMqAutoConnect{}
 	prevDial := rmqDialHook

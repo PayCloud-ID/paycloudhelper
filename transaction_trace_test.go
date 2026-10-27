@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// goldenTransactionTraceJSON is the byte-exact body both paycloudhelper and
+// goldenTransactionTraceJSON is the byte-exact PA body both paycloudhelper and
 // paycloudhelper-rs pc-audit must emit for the same logical record. Field
 // order follows the owner vocabulary. createdAt is a consumer field and is
 // absent. Keep this string identical to the Rust golden.
@@ -154,5 +154,96 @@ func TestLogTransactionTrace_SubmitsTransactionTraceCommand(t *testing.T) {
 	}
 	if got := string(b); got != goldenTransactionTraceJSON {
 		t.Fatalf("submitted data drifted\n got: %s\nwant: %s", got, goldenTransactionTraceJSON)
+	}
+}
+
+func TestTransactionTrace_FTFieldsSerialise(t *testing.T) {
+	tr := TransactionTrace{
+		Event: "ftm.transfer_created", Domain: TraceDomainFundtransfer,
+		TransferId: 42, ReferenceNumber: "FT-1-20261025-AB", PartnerReferenceNo: "P-9",
+		DetailId: 7, DetailPartnerReferenceNo: "P-9-1", VendorReferenceNo: "V-1", MerchantId: 5,
+	}
+	b, err := json.Marshal(tr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatal(err)
+	}
+	for key, want := range map[string]any{
+		"domain": "fundtransfer", "transferId": float64(42), "referenceNumber": "FT-1-20261025-AB",
+		"partnerReferenceNo": "P-9", "detailId": float64(7), "detailPartnerReferenceNo": "P-9-1",
+		"vendorReferenceNo": "V-1", "merchantId": float64(5),
+	} {
+		if got[key] != want {
+			t.Errorf("field %s = %v; want %v", key, got[key], want)
+		}
+	}
+	for _, key := range []string{"trxId", "trxNo", "mId", "trxReferenceNo", "trxPayCode1", "trxPcId", "ticketId"} {
+		if _, exists := got[key]; exists {
+			t.Errorf("FT trace carries PA key %s", key)
+		}
+	}
+	b, err = json.Marshal(TransactionTrace{Event: "x", TrxNo: "T1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"domain", "transferId", "referenceNumber", "partnerReferenceNo", "detailId", "detailPartnerReferenceNo", "vendorReferenceNo", "merchantId"} {
+		if strings.Contains(string(b), `"`+key+`"`) {
+			t.Errorf("PA trace carries empty FT key %s", key)
+		}
+	}
+}
+
+func TestHasAnyTraceKey_FTKeys(t *testing.T) {
+	for name, tr := range map[string]TransactionTrace{
+		"transferId":     {TransferId: 1},
+		"refused create": {PartnerReferenceNo: "P-1"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if !hasAnyTraceKey(tr) {
+				t.Fatal("FT key must allow publishing")
+			}
+		})
+	}
+	if hasAnyTraceKey(TransactionTrace{DetailId: 7}) {
+		t.Fatal("detailId alone must not allow publishing")
+	}
+}
+
+func TestLogTransactionTrace_FTDefaultsToV2(t *testing.T) {
+	origPub, origEnabled := auditTrxPublisher, auditTrxEnabled.Load()
+	t.Cleanup(func() {
+		auditTrxPublisher = origPub
+		auditTrxEnabled.Store(origEnabled)
+	})
+	pub := NewAuditPublisher(nil, WithBufferSize(4))
+	auditTrxPublisher = pub
+	auditTrxEnabled.Store(true)
+	for _, tc := range []struct {
+		name        string
+		trace       TransactionTrace
+		wantVersion int
+	}{
+		{"FT transfer", TransactionTrace{Event: "ftm.transfer_created", Domain: TraceDomainFundtransfer, TransferId: 42}, 2},
+		{"FT refused create", TransactionTrace{Event: "fth2h.disbursement_received", Domain: TraceDomainFundtransfer, PartnerReferenceNo: "P-1"}, 2},
+		{"PA", TransactionTrace{Event: "tm.order_created", TrxNo: "T1"}, 1},
+		{"explicit version", TransactionTrace{V: 3, Event: "ftm.transfer_created", Domain: TraceDomainFundtransfer, TransferId: 42}, 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			LogTransactionTrace(tc.trace)
+			if len(pub.msgChan) != 1 {
+				t.Fatalf("submitted %d messages; want 1", len(pub.msgChan))
+			}
+			msg := <-pub.msgChan
+			got, ok := msg.payload.Data.(TransactionTrace)
+			if !ok || got.V != tc.wantVersion {
+				t.Fatalf("payload = %+v; want schema v%d", msg.payload.Data, tc.wantVersion)
+			}
+			if got.EventTime == "" || got.Kind != TraceKindHop || msg.payload.Command != CmdTransactionTrace {
+				t.Fatalf("missing trace defaults: %+v", got)
+			}
+		})
 	}
 }

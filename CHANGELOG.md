@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.15.0] - 2026-10-27
+
+### Added
+
+- **TransactionTrace:** FT keys (`transferId`, `referenceNumber`,
+  `partnerReferenceNo`, `detailId`, `detailPartnerReferenceNo`, `vendorReferenceNo`,
+  `merchantId`), `domain`, and the `create`, `payment`, `disbursement` legs.
+  FT defaults to schema v2; PA remains v1. `transferId` and `partnerReferenceNo`
+  allow publishing without a PA key. These additions are Go-only (FT-219 D5);
+  the Rust `pc-audit` crate remains PA-only until its first FT producer.
+
+### Fixed
+
+- **RabbitMQ cleanup:** skip absent channels and connections when stopping or
+  resetting an auto-connection. Cleanup after incomplete initialization and
+  repeated stops no longer dereference nil resources.
+
 ## [v1.14.1] - 2026-10-23
 
 ### Fixed
@@ -60,6 +77,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   format-string log lines are now sampled (production 5 then every 50th, staging 10 then every 10th,
   develop 20 then every 20th, per second), with a `[+N suppressed]` suffix. Check alerts and
   dashboards that count every occurrence of a hot log line before bumping.
+
+## [v1.13.0] - 2026-10-09
+
+### Added
+
+- **TransactionTrace:** best-effort `LogTransactionTrace` on the dedicated
+  transaction-audit publisher, PA search keys, hop/milestone/poll kinds,
+  callback-attempt fields, and stable JSON names shared with Rust `pc-audit`.
 
 ## [v1.12.2] - 2026-09-03
 
@@ -471,6 +496,7 @@ History before this changelog was introduced. See git tags and release notes for
 
 Retracted versions (do not use): v1.6.3, v1.6.0, v1.5.2 — see `go.mod` retract block.
 
+[v1.15.0]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.14.1...v1.15.0
 [v1.12.0]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.11.1..v1.12.0
 [v1.8.2]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.8.1..v1.8.2
 [v1.8.1]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.8.0-beta.2..v1.8.1

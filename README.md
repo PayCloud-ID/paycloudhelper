@@ -505,6 +505,7 @@ e.Use(pch.RevokeToken)     // JWT + Redis revocation check
 - **Purpose:** publish audit trail payloads (v1 and v2 publisher modes).
 - **Connection:** set through `SetUpRabbitMq` or v2 publisher setup APIs.
 - **Key operations:** process/data audit log publishing with retry and backpressure controls.
+- **Cleanup:** auto-connection stop/reset skips absent resources, including repeated stops after incomplete initialization.
 
 ### Sentry
 
@@ -756,6 +757,21 @@ make proto.service.scaffold SERVICE=clientpg
 - `prompt-migrate-bitbucket-pipelines-to-github-actions.md`
   - Reads `bitbucket-pipelines.yml` and generates an equivalent GitHub Actions workflow.
   - Preserves build/vet/test/coverage gates and branch triggers.
+
+## Transaction trace
+
+`LogTransactionTrace(TransactionTrace{...})` submits a best-effort event to the
+publisher configured with `SetUpAuditTrailTrxPublisher`. It requires an event and
+a search key; disabled tracing and a full buffer drop records without blocking.
+
+PA traces keep schema v1 and their existing JSON names. For FT, set
+`Domain: TraceDomainFundtransfer` and `TransferId` (or `PartnerReferenceNo` for a
+refused create). FT defaults to v2 and provides `ReferenceNumber`, `DetailId`,
+`DetailPartnerReferenceNo`, `VendorReferenceNo`, and `MerchantId`; leave PA keys
+empty. Use `TraceLegCreate`, `TraceLegPayment`, `TraceLegDisbursement`,
+`TraceLegCallback`, or `TraceLegLifecycle`. Empty FT fields are omitted on PA
+records. FT fields are Go-only until the first Rust FT producer (FT-219 D5).
+Never include headers, tokens, signatures, or vendor credentials in trace bodies.
 
 ## Contributing
 

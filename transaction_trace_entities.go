@@ -9,9 +9,14 @@ const (
 	TraceKindMilestone = "milestone"
 	TraceKindPoll      = "poll"
 
-	TraceLegCreateOrder = "create_order"
-	TraceLegCallback    = "callback"
-	TraceLegLifecycle   = "lifecycle"
+	TraceLegCreateOrder  = "create_order"
+	TraceLegCallback     = "callback"
+	TraceLegLifecycle    = "lifecycle"
+	TraceLegCreate       = "create"
+	TraceLegPayment      = "payment"
+	TraceLegDisbursement = "disbursement"
+
+	TraceDomainFundtransfer = "fundtransfer"
 
 	TraceDirectionInbound  = "inbound"
 	TraceDirectionOutbound = "outbound"
@@ -58,6 +63,16 @@ type TransactionTrace struct {
 	ExternalId     string `json:"externalId,omitempty"`
 	RequestId      string `json:"requestId,omitempty"`
 	Traceparent    string `json:"traceparent,omitempty"`
+
+	// Fund transfer keys (schema v2). Go-only until the first Rust FT producer (FT-219 D5).
+	Domain                   string `json:"domain,omitempty"`
+	TransferId               int64  `json:"transferId,omitempty"`
+	ReferenceNumber          string `json:"referenceNumber,omitempty"`
+	PartnerReferenceNo       string `json:"partnerReferenceNo,omitempty"`
+	DetailId                 int64  `json:"detailId,omitempty"`
+	DetailPartnerReferenceNo string `json:"detailPartnerReferenceNo,omitempty"`
+	VendorReferenceNo        string `json:"vendorReferenceNo,omitempty"`
+	MerchantId               int64  `json:"merchantId,omitempty"`
 
 	// Callback hops only (ADR D10): both directions are countable per attempt.
 	CallbackDirection string `json:"callbackDirection,omitempty"` // vendor_to_paycloud | paycloud_to_merchant

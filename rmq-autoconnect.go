@@ -61,8 +61,12 @@ var rmqChannelCloseHook = func(ch *amqp.Channel) error { return ch.Close() }
 var rmqConnCloseHook = func(conn *amqp.Connection) error { return conn.Close() }
 
 func (r *rMqAutoConnect) resetLocked() {
-	_ = rmqChannelCloseHook(r.ch)
-	_ = rmqConnCloseHook(r.conn)
+	if r.ch != nil {
+		_ = rmqChannelCloseHook(r.ch)
+	}
+	if r.conn != nil {
+		_ = rmqConnCloseHook(r.conn)
+	}
 	r.ch = nil
 	r.conn = nil
 }
