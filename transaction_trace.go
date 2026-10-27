@@ -4,7 +4,7 @@ import "time"
 
 func hasAnyTraceKey(d TransactionTrace) bool {
 	return d.TrxId != 0 || d.TrxNo != "" || d.TrxReferenceNo != "" || d.TrxPayCode1 != "" ||
-		d.TicketId != "" || d.MerchantCode != "" || d.MId != 0
+		d.TicketId != "" || d.MerchantCode != "" || d.MId != 0 || d.TransferId != 0 || d.PartnerReferenceNo != ""
 }
 
 // LogTransactionTrace publishes one trace event on the per-transaction audit
@@ -20,6 +20,9 @@ func LogTransactionTrace(data TransactionTrace) {
 	}
 	if data.V == 0 {
 		data.V = 1
+		if data.Domain == TraceDomainFundtransfer {
+			data.V = 2
+		}
 	}
 	if data.Kind == "" {
 		data.Kind = TraceKindHop
