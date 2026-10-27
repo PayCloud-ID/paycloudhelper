@@ -9,9 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.15.0] - 2026-10-27
+
 ### Added
 
-- **TransactionTrace (planned v1.15.0):** FT keys (`transferId`, `referenceNumber`,
+- **TransactionTrace:** FT keys (`transferId`, `referenceNumber`,
   `partnerReferenceNo`, `detailId`, `detailPartnerReferenceNo`, `vendorReferenceNo`,
   `merchantId`), `domain`, and the `create`, `payment`, `disbursement` legs.
   FT defaults to schema v2; PA remains v1. `transferId` and `partnerReferenceNo`
@@ -488,6 +490,7 @@ History before this changelog was introduced. See git tags and release notes for
 
 Retracted versions (do not use): v1.6.3, v1.6.0, v1.5.2 — see `go.mod` retract block.
 
+[v1.15.0]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.14.1...v1.15.0
 [v1.12.0]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.11.1..v1.12.0
 [v1.8.2]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.8.1..v1.8.2
 [v1.8.1]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.8.0-beta.2..v1.8.1
