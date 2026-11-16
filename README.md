@@ -125,6 +125,7 @@ For the full Redis integration walkthrough, env vars, locking, and per-service m
 | `phaudittrailv0`       | `phaudittrailv0/`       | Legacy v0 audit trail (RabbitMQ)                                                                              |
 | `phjson`               | `phjson/`               | Sonic JSON wrapper for high-throughput consumers                                                              |
 | `pcauth`               | `pcauth/`               | Canonical UUID-salted bcrypt password hashing and cost-upgrade verification                                   |
+| `phlogmask`            | `phlogmask/`            | Key-based masking of log and audit-trail copies for FT services                                               |
 | `sdk/services/s3minio` | `sdk/services/s3minio/` | Service-scoped S3MinIO SDK (helper, grpc, http bridge, pb, proto, facade)                                     |
 | `sdk/shared`           | `sdk/shared/`           | Shared runtime placeholders for transport, observability, and error normalization across future SDKs          |
 
@@ -375,6 +376,40 @@ if result.Matched && result.NeedsRehash {
 
 Services that import `pcauth` without importing the root package can configure the cost explicitly
 at startup with `pcauth.ConfigureCost(cost)`.
+
+### Log Masking (`phlogmask`)
+
+`phlogmask` masks customer data and secrets in the copies of payloads, headers, URLs, errors and
+audit-trail or trace payloads that a service logs. It never changes what goes over the wire. Masking
+is by key: account numbers keep their last 4 digits, names keep initials, email keeps the first letter
+and the domain, phone keeps the last 3 digits, free text becomes its length, and tokens, signatures and
+keys are replaced. IDs, references, amounts, codes and statuses stay readable. The FT services
+(`ftsnapinterface-manager`, `fundtransfer-module`, `fundtransferh2h-manager`) use it.
+
+The package reads no environment. Each service parses its own switch (e.g. `LOG_MASK_SENSITIVE_DATA`)
+and applies it once at boot. Production always masks:
+
+```go
+import "github.com/PayCloud-ID/paycloudhelper/phlogmask"
+
+on, forced := phlogmask.Resolve(appEnv, cfg.LogMaskSensitiveData)
+phlogmask.SetEnabled(on)
+if forced {
+    pchelper.LogW("[main] LOG_MASK_SENSITIVE_DATA is not true in production; masking forced on")
+}
+```
+
+| Function | Masks |
+|---|---|
+| `JSON(body []byte) []byte` | JSON body by key; text that is not JSON goes through a `"key":"value"` match |
+| `URL(raw string) string` | userinfo password, sensitive query values, VA numbers in Xendit VA routes |
+| `Headers(h http.Header) http.Header` | `Authorization` (scheme kept), cookies, signatures, tokens |
+| `Err(err error) string` | the URL inside a wrapped `*url.Error`, in place; wrapper text is kept |
+| `Value(key, v string) string` | one value as if it sat under `key` |
+| `Payload(v any) any` | a masked copy of an audit or trace payload, including JSON held in strings |
+
+The zero value masks, so a process that never calls `SetEnabled` masks. With masking off, every
+function returns its input unchanged.
 
 ### Sentry Error Tracking
 

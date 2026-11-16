@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.16.0] - 2026-11-16
+
+### Added
+
+- **phlogmask:** new subpackage for key-based masking of log and audit-trail
+  copies (FT-236). It starts from the FT services' `internal/logmask` (FT-235):
+  `Resolve`, `SetEnabled`, `Enabled`, `JSON`, `URL`, `Headers`, `Value` and `Err`.
+  It adds `Payload` for audit-trail and trace payloads. `Err` masks the URL of a
+  wrapped `*url.Error` in place and keeps the wrapper text, where the FT copies
+  returned only the rebuilt `url.Error`. The package reads no environment, and
+  with masking off every function returns its input unchanged.
+
 ## [v1.15.0] - 2026-10-27
 
 ### Added
@@ -496,6 +508,7 @@ History before this changelog was introduced. See git tags and release notes for
 
 Retracted versions (do not use): v1.6.3, v1.6.0, v1.5.2 — see `go.mod` retract block.
 
+[v1.16.0]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.15.0...v1.16.0
 [v1.15.0]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.14.1...v1.15.0
 [v1.12.0]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.11.1..v1.12.0
 [v1.8.2]: https://github.com/PayCloud-ID/paycloudhelper/compare/v1.8.1..v1.8.2
