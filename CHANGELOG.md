@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **phlogmask:** new subpackage for key-based masking of log and audit-trail
+  copies (FT-236). It starts from the FT services' `internal/logmask` (FT-235):
+  `Resolve`, `SetEnabled`, `Enabled`, `JSON`, `URL`, `Headers`, `Value` and `Err`.
+  It adds `Payload` for audit-trail and trace payloads. `Err` masks the URL of a
+  wrapped `*url.Error` in place and keeps the wrapper text, where the FT copies
+  returned only the rebuilt `url.Error`. The package reads no environment, and
+  with masking off every function returns its input unchanged.
+
 ## [v1.15.0] - 2026-10-27
 
 ### Added
